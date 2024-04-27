@@ -1,0 +1,97 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    compileSdkVersion rootProject.ext.android.compileSdkVersion
+
+    defaultConfig {
+        applicationId "com.xrs.bluetooth_device"
+        minSdkVersion rootProject.ext.android.minSdkVersion
+        targetSdkVersion rootProject.ext.android.targetSdkVersion
+        versionCode rootProject.ext.android.versionCode
+        versionName rootProject.ext.android.versionName
+
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+        multiDexEnabled true
+        multiDexKeepProguard file("tinker_multidexkeep.pro")
+        /**
+         * buildConfig can change during patch!
+         * we can use the newly value when patch
+         */
+        buildConfigField "String", "MESSAGE", "\"I am the base apk\""
+//        buildConfigField "String", "MESSAGE", "\"I am the patch apk\""
+        /**
+         * client version would update with patch
+         * so we can get the newly git version easily!
+         */
+        buildConfigField "String", "TINKER_ID", "\"1.0\""
+        buildConfigField "String", "PLATFORM", "\"all\""
+    }
+    android.applicationVariants.all { variant ->
+        variant.outputs.all {
+            def projectName = 'WatchService'
+            String buildTypeName = variant.buildType.name
+            def apkName
+            if (buildTypeName.equals('release')) {
+                apkName = "jiaokao"/*projectName + defaultConfig.versionName + "_release" + "_" + getDate()*/ + '.apk'
+            } else if (buildTypeName.equals('debug')) {
+                apkName = "jiaokao"/*projectName + defaultConfig.versionName + '_debug' + "_" + getDate()*/ + '.apk'
+            }
+            outputFileName = apkName
+        }
+    }
+    signingConfigs {
+        debug {
+            storeFile file('EQC_G5.jks')
+            storePassword '123456'
+            keyAlias = 'watch_g5'
+            keyPassword '123456'
+        }
+
+      /*  debug {
+            storeFile file('wangwei.jks')
+            storePassword 'android'
+            keyAlias = 'android'
+            keyPassword 'android'
+        }*/
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            debuggable true
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+
+    implementation 'com.android.support:appcompat-v7:28.0.0'
+    implementation 'com.android.support:design:28.0.0'
+    implementation 'com.android.support.constraint:constraint-layout:2.0.4'
+    implementation 'android.arch.navigation:navigation-fragment:1.0.0'
+    implementation 'android.arch.navigation:navigation-ui:1.0.0'
+    implementation 'com.google.code.gson:gson:2.8.2'
+    implementation files('src\\main\\java\\com\\libs\\classes.jar')
+    implementation 'com.squareup.okhttp3:okhttp:3.4.1'
+    implementation rootProject.ext.dependencies['support-multidex']
+    //可选，用于生成application类
+
+    testImplementation 'junit:junit:4.+'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+}
+
+

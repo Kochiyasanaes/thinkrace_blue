@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.xrs.bluetooth_device"
+    android:sharedUserId="android.uid.system"
+    android:installLocation="internalOnly"
+   >
+
+    <uses-permission android:name="android.permission.GET_TASKS" />
+    <uses-permission android:name="android.permission.INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.CALL_PHONE"/>
+    //网络
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REBOOT" />
+    //震动
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.READ_PRIVILEGED_PHONE_STATE" />
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    //读取手机信息
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- 粗略定位授权 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- 精细定位授权 -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    //读写本地文件
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS"/>
+
+    <!--蓝牙-->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <!--wifi-->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+
+    <application
+        android:name=".KApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="jiaokao"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+       >
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="jiaokao"
+            android:theme="@style/Theme.Jiaokaodemo.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+          <service android:name=".service.NotificationService" android:exported="true">
+        </service>
+
+        <receiver android:name=".receiver.BluetoothConnectActivityReceiver" >
+            <intent-filter android:priority="1000">
+                <action android:name="android.bluetooth.device.action.PAIRING_REQUEST" />
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name=".receiver.CommonAlarmReceiver"
+            android:enabled="true"
+            android:exported="true">
+            >
+            <intent-filter>
+                <action android:name="android.intent.action.BATTERY_LOW"/>
+                <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
+                <action android:name="android.intent.action.SCREEN_OFF" />
+                <action android:name="android.intent.action.mysos"/>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+                <action android:name="com.thinkrace.intent.ACTION_ALARM_LOCATION_START" />
+                <action android:name="com.thinkrace.intent.ACTION_ALARM_CONFIRMED_FREQUENCY_UPLOAD_BLE" />
+                <action android:name="com.thinkrace.intent.ACTION_ALARM_CONFIRMED_Ble_IsOpen" />
+                <action android:name="com.thinkrace.intent.ACTION_LOG" />
+                <action android:name="com.xrs.WEAR" />
+                <action android:name="com.thinkrace.intent.HEARTBEAT" />
+                <action android:name="com.thinkrace.intent.ACTION_Network" />
+                <action android:name="com.enqualcomm.support.local_sos" />
+                <action android:name="com.zdt.stepdata"/>
+                <action android:name="com.hearttest.data"/>
+                <action android:name="com.xrs.FALL_ALERT"/>
+                <action android:name="com.xrs.STILL_ALERT"/>
+                <action android:name="com.xrs.CMD"/>
+                <action android:name="android.hardware.usb.action.USB_STATE"/>
+                <action android:name="com.ic.action.keyevent"/>
+                <action android:name="action.ic.srvPushTxt"/>
+            </intent-filter>
+        </receiver>
+
+<!--        <provider
+            android:name="android.support.v4.content.FileProvider"
+            android:authorities="com.carson.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>-->
+
+    </application>
+
+</manifest>
