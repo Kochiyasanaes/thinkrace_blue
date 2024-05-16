@@ -185,7 +185,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                         Log.e("网络","有卡");
                         i++;
                         Log.e("网络",i+(SharedPreferencedUtils.getBoolean(context,"isReboot",false) + ""));
-                        if (i == 5 && !SharedPreferencedUtils.getBoolean(context,"isReboot",false) && !NetworkUtil.isNetworkAvailable(context)){
+                        if (i == 5){
                             try {
                                 DeviceUtils.setSilentShutdown(context);
                                 SharedPreferencedUtils.setBoolean(context,"isReboot",true);
@@ -243,6 +243,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                     break;
                 case ReceiverConstant.Action_srvPushTxt:
                     String textPush = intent.getStringExtra("txtMsg");
+                    Log.e("pushTxt:",textPush);
                     if (textPush.startsWith(">") && textPush.contains("*")) {
                             int startIndex = textPush.indexOf(">") + 2;
                             int endIndex = textPush.indexOf("<", startIndex);
@@ -285,6 +286,14 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                                             Log.e("blue",e.toString());
                                         }
                                         break;
+                                    case "factorymode":
+                                        Log.e("pushTxt:factorymode ",cmd);
+                                        if (cmd.equals("0")){
+                                            PropertiesUtil.setSystemProperties("persist.sys.isopentest",false);
+                                        }else if (cmd.equals("1")){
+                                            PropertiesUtil.setSystemProperties("persist.sys.isopentest",true);
+                                        }
+                                    break;
                                     default:
                                         break;
                                 }

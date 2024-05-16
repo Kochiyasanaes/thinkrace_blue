@@ -11,6 +11,7 @@ import com.libsocket.sdk.OkSocket;
 import com.xrs.bluetooth_device.constant.PropertiesConstant;
 import com.xrs.bluetooth_device.data.GlobalSettings;
 import com.xrs.bluetooth_device.function.AlarmTimer;
+import com.xrs.bluetooth_device.utils.ApnUtil;
 import com.xrs.bluetooth_device.utils.DeviceUtils;
 import com.xrs.bluetooth_device.utils.LogUtils;
 import com.xrs.bluetooth_device.utils.PropertiesUtil;
@@ -29,6 +30,7 @@ import com.xrs.bluetooth_device.utils.Utils;
 public class KApplication extends MultiDexApplication /*implements KCEventListen*/ {
     private static KApplication instance;
     public static Context sContext;
+    public static ApnUtil KapnUtil = new ApnUtil();
     private static String Tag = "KApplication";    // TCP连接状态
     public static boolean bConnect = false;
     // 是否重连标记
@@ -50,7 +52,7 @@ public class KApplication extends MultiDexApplication /*implements KCEventListen
         try {
             init();
         }catch (Exception e){
-            LogUtils.e(Tag,"初始化导致异常，需要重启");
+            LogUtils.e(Tag,e.toString());
         }
     }
 
@@ -60,10 +62,29 @@ public class KApplication extends MultiDexApplication /*implements KCEventListen
         GlobalSettings.instance().saveImei(Utils.getContext());
         GlobalSettings.instance().saveImsi(Utils.getContext());
         AlarmTimer.DEFAULT_Blue_INTERVAL = SharedPreferencedUtils.getLong(sContext, "blueScanTime", Long.valueOf(2 * 60 * 1000));
+
         //初始化Okhttp
         OkSocket.initialize(this, true);
         switch (DeviceUtils.getSystemModel()) {
             case "sl8541e_1h10_gofu":
+                break;
+            case "l009D-US-Robert":
+            case "l009-US-Robert":
+                TcpConstants.DOMAIN = PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Ip);
+                TcpConstants.IP = PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Ip);
+                TcpConstants.PORT = Integer.parseInt(PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Port));
+                AlarmTimer.startIsNetwork(sContext);
+                if (DeviceUtils.isSimReady(sContext)) {
+                    int tip = KapnUtil.getAPN(sContext, "30304.mcs");
+                    if (tip > 0) {
+                        KapnUtil.setAPN(tip, sContext);
+                    } else {
+                        KapnUtil.addAPN("30304.mcs", "30304.mcs", "", "", "", "", "310", "410", sContext);
+                        int tipRe = MainActivity.apnUtil.getAPN(sContext, "30304.mcs");
+                        Log.e(Tag,"增加apn");
+                        KapnUtil.setAPN(tipRe, sContext);
+                    }
+                }
                 break;
             // 更多的 case ...
             default:

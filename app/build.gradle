@@ -35,9 +35,9 @@ android {
             String buildTypeName = variant.buildType.name
             def apkName
             if (buildTypeName.equals('release')) {
-                apkName = "jiaokao"/*projectName + defaultConfig.versionName + "_release" + "_" + getDate()*/ + '.apk'
+                apkName = "Bluetooth_Tool"/*projectName + defaultConfig.versionName + "_release" + "_" + getDate()*/ + '.apk'
             } else if (buildTypeName.equals('debug')) {
-                apkName = "jiaokao"/*projectName + defaultConfig.versionName + '_debug' + "_" + getDate()*/ + '.apk'
+                apkName = "Bluetooth_Tool"/*projectName + defaultConfig.versionName + '_debug' + "_" + getDate()*/ + '.apk'
             }
             outputFileName = apkName
         }

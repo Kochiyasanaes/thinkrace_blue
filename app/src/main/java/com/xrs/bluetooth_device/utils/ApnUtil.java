@@ -8,6 +8,7 @@ import android.net.Uri;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
+import com.xrs.bluetooth_device.KApplication;
 import com.xrs.bluetooth_device.MainActivity;
 import com.xrs.bluetooth_device.model.ApnInfo;
 
@@ -22,7 +23,7 @@ public class ApnUtil {
                       String port,String user,String password,
                       String mcc,String mnc,Context context) {
         int id = -1;
-        context = MainActivity.sContext;
+        context = KApplication.sContext;
         String NUMERIC = getSIMInfo(context);
         if (NUMERIC == null) {
             return -1;

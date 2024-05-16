@@ -49,14 +49,14 @@
         android:name=".KApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="jiaokao"
+        android:label="Bluetooth_Tool"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
        >
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="jiaokao"
+            android:label="Bluetooth_Tool"
             android:theme="@style/Theme.Jiaokaodemo.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

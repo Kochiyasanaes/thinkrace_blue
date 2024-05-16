@@ -123,6 +123,7 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
         initBluetooth();
         initWifi();
 
+
         startAlarmTimer();
         Toast toast = Toast.makeText(MainActivity.this, BluetoothAdapter.getDefaultAdapter().getAddress(), Toast.LENGTH_LONG);
         showMyToast(toast, 20*1000);
