@@ -1,35 +1,39 @@
 package com.xrs.bluetooth_device;
 
-import android.Manifest;
+import static android.location.LocationManager.GPS_PROVIDER;
+
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
 
-import android.graphics.ImageFormat;
+import android.content.pm.PackageManager;
+import android.graphics.BitmapFactory;
 import android.hardware.Camera;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
+import android.location.Location;
 import android.location.LocationManager;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
 import android.media.MediaPlayer;
+import android.media.MediaRecorder;
 import android.net.Uri;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
-import android.telephony.TelephonyManager;
+import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.Window;
@@ -40,15 +44,15 @@ import android.widget.Toast;
 
 import com.google.gson.Gson;
 
+import com.ic.api.Api;
+import com.ic.api.ApiCreator;
 import com.xrs.bluetooth_device.constant.BleConstant;
+import com.xrs.bluetooth_device.constant.PropertiesConstant;
 import com.xrs.bluetooth_device.function.AlarmTimer;
-import com.xrs.bluetooth_device.model.ApnInfo;
 import com.xrs.bluetooth_device.model.DeviceDetailsModel;
-import com.xrs.bluetooth_device.receiver.CommonAlarmReceiver;
-import com.xrs.bluetooth_device.service.NotificationService;
-import com.xrs.bluetooth_device.utils.CameraPreview;
 import com.xrs.bluetooth_device.utils.CameraUtil;
 import com.xrs.bluetooth_device.utils.FileUtils;
+
 import com.xrs.bluetooth_device.utils.LogUtils;
 import com.xrs.bluetooth_device.model.WifiListModel;
 import com.xrs.bluetooth_device.service.BlueService;
@@ -65,15 +69,13 @@ import com.xrs.bluetooth_device.utils.UploadUtil;
 import com.xrs.bluetooth_device.utils.WifiUtils;
 
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity implements SensorEventListener,Thread.UncaughtExceptionHandler {
     private static final String TAG = "blueToothUtil_Device:";
@@ -113,25 +115,70 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
         init();
         sContext = this;
         initView();
+//        Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+//        this.startActivity(intent);
+//        Settings.Secure.setLocationProviderEnabled(getContentResolver(), "gps", true);
+//        Settings.Secure.putInt(this.getContentResolver(), Settings.Secure.LOCATION_MODE, Settings.Secure.LOCATION_MODE_HIGH_ACCURACY);
+
+//        Intent intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
+//        startActivity(intent);
+//        Intent intent = new Intent(Intent.ACTION_DIAL);
+//        // 可以通过 data 属性设置默认的电话号码，这里以 "tel:" 开头
+//        // 如果不设置电话号码，拨号盘将打开并清空
+//        intent.setData(Uri.parse("tel:"));
+//        // 启动Intent
+//        startActivity(intent);
+//        Notification notification = new NotificationCompat.Builder(this, "CHANNEL_ID")
+//                .setSmallIcon(R.drawable.ic_launcher_background) // 设置通知小图标
+//                .setLargeIcon(BitmapFactory.decodeResource(this.getResources(), R.drawable.ic_launcher_background)) // 设置通知大图标
+//                .setContentTitle("通知标题") // 设置通知标题
+//                .setContentText("这是一条通知内容") // 设置通知内容
+//                .setPriority(NotificationCompat.PRIORITY_DEFAULT) // 设置通知优先级
+//                .build();
+//        NotificationManager notificationManager = (NotificationManager) this.getSystemService(Context.NOTIFICATION_SERVICE);
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+//            NotificationChannel channel = new NotificationChannel("CHANNEL_ID", "Channel human readable title", NotificationManager.IMPORTANCE_DEFAULT);
+//            channel.setDescription("Channel description");
+//            notificationManager.createNotificationChannel(channel);
+//        }
+//        notificationManager.notify(1, notification);
 /*        handler = new Handler();
         mediaPlayer = MediaPlayer.create(this, android.provider.Settings.System.DEFAULT_NOTIFICATION_URI);
         mediaPlayer.setLooping(true);
         handler.postDelayed(playSoundRunnable, INTERVAL);*/
-
+//        MicrophoneTest microphoneTest = new MicrophoneTest();
+//        microphoneTest.start();
      /*   initSocket();*/
-        
         initBluetooth();
         initWifi();
-
-
-        startAlarmTimer();
-        Toast toast = Toast.makeText(MainActivity.this, BluetoothAdapter.getDefaultAdapter().getAddress(), Toast.LENGTH_LONG);
-        showMyToast(toast, 20*1000);
         setDiscoverableTimeout();
+        PropertiesUtil.setSystemProperties("persist.sys.sosmode",false);
+////        startAlarmTimer();
+//        Toast toast = Toast.makeText(MainActivity.this, BluetoothAdapter.getDefaultAdapter().getAddress(), Toast.LENGTH_LONG);
+//        showMyToast(toast, 20*1000);
 
+//
+//        Intent intent = new Intent();
+//        // 检查设备是否支持Wi-Fi
+//
+//
+/*
+        Settings.Secure.setLocationProviderEnabled(getContentResolver(), GPS_PROVIDER, true);
+*/
+        Log.e("ss ",PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Ip));
 
-    /*    CameraUtil cameraUtil = new CameraUtil(sContext);
-        cameraUtil.getPicture(System.currentTimeMillis()+"");*/
+/*        if (SharedPreferencedUtils.getInteger(sContext,"rootTime",0) < 500) {
+            try {
+                SharedPreferencedUtils.setInteger(sContext, "rootTime", SharedPreferencedUtils.getInteger(sContext,"rootTime",0) + 1);
+                DeviceUtils.setSilentShutdown(sContext);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }*/
+
+   /*     Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+        startActivity(intent);*/
+        /*test();*/
 
 
 /*        CommonAlarmReceiver sOnBroadcastReciver=new CommonAlarmReceiver();
@@ -175,8 +222,8 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
 /*
         LedUtils.LedAllEnable(false);
 */
- /*       LogUtils.e("apn",apnUtil.getCurrentAPN(sContext));
-        for (ApnInfo a :apnUtil.getApnList(sContext)
+//       LogUtils.e("apn",apnUtil.getCurrentAPN(sContext));
+     /*   for (ApnInfo a :apnUtil.getApnList(sContext)
              ) {
             LogUtils.e("apn",a.getName()+","+a.getApn()+","+a.getId());
         }*/
@@ -195,7 +242,26 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
         }).start();*/
     }
 
+    public void test() {
+        Executor executorService = Executors.newSingleThreadExecutor();
+        executorService.execute(new Runnable() {
+            @Override
+            public void run() {
+                Api api = ApiCreator.getInstance();
+                //开启心率血氧的测试
+                boolean enablePPG = api.enablePPG();
 
+                Log.d(TAG, "enablePPG ==> " + enablePPG);
+
+                boolean finish = false;
+                int testCount = 0;
+                while (!finish) {
+                    Log.d(TAG, "enablePPG ==> " + api.getStepCount());
+
+                }
+            }
+        });
+    }
     
 
     private Runnable playSoundRunnable = new Runnable() {
@@ -234,9 +300,15 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
             MainActivity.bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
             // 初始化蓝牙开关状态
             BleConstant.Ble_IsOpen = SharedPreferencedUtils.getString(this, "isOpen", "0").equals("1");
-            // 尝试打开蓝牙
-            blueToothUtils.startBlueEnable(BluetoothAdapter.getDefaultAdapter(), this);
-            Ble_Action();
+
+            if (BleConstant.Ble_IsOpen || !DeviceUtils.getSystemModel().contains("HK")){
+                // 尝试打开蓝牙
+                blueToothUtils.startBlueEnable(BluetoothAdapter.getDefaultAdapter(), this);
+                Ble_Action();
+            }else {
+                BluetoothAdapter.getDefaultAdapter().disable();
+            }
+
         } catch (Exception e) {
             Log.e("blue", e.toString());
         }
@@ -251,18 +323,15 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
     }
 
     private void initWifi() {
-        // 修改wifi策略
-        Settings.Secure.putInt(getContentResolver(), Settings.Secure.LOCATION_MODE, 1);
 
-        // 初始化定位
-        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
         // 初始化Wifi
         wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+        PropertiesUtil.setSystemProperties("persist.sys.ic.wifi_enable","true");
         wifiUtil = new WifiUtils(this);
-        /*wifiUtil.openWifi();
-        WifiConfiguration wifiConfiguration = wifiUtil.createWifiInfo("TTVCL","123456789aa",3);
-        wifiUtil.addNetWork(wifiConfiguration);*/
+        wifiUtil.openWifi();
+        WifiConfiguration wifiConfiguration = wifiUtil.createWifiInfo("traxbean","88888888",3);
+        wifiUtil.addNetWork(wifiConfiguration);
     }
 
     private void startAlarmTimer() {
@@ -556,7 +625,7 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
                                     e.printStackTrace();
                                 }
                                 break;
-                            case "gps":
+                                case "gps":
                                 break;
                             case"blueOpen":
                                 Log.e("msg:blueOpen",readMessage);

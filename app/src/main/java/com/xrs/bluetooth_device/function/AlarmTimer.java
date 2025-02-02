@@ -145,6 +145,8 @@ public class AlarmTimer {
     private static void setAlarmTimer(Context ctx, AlarmEntity entity) {
         String action = entity.getAction();
         Intent myIntent = new Intent();
+        myIntent.setFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
+        myIntent.setPackage("com.xrs.bluetooth_device"); // 替换为目标应用程序的包名
         myIntent.setAction(action);
         int alarmManagerType = entity.getAlarmManagerType();
         PendingIntent sender = PendingIntent.getBroadcast(ctx, 0, myIntent, PendingIntent.FLAG_CANCEL_CURRENT);

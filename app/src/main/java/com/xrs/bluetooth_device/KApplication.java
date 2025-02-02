@@ -73,7 +73,7 @@ public class KApplication extends MultiDexApplication /*implements KCEventListen
                 TcpConstants.DOMAIN = PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Ip);
                 TcpConstants.IP = PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Ip);
                 TcpConstants.PORT = Integer.parseInt(PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Port));
-                AlarmTimer.startIsNetwork(sContext);
+
                 if (DeviceUtils.isSimReady(sContext)) {
                     int tip = KapnUtil.getAPN(sContext, "30304.mcs");
                     if (tip > 0) {
@@ -91,6 +91,17 @@ public class KApplication extends MultiDexApplication /*implements KCEventListen
                 TcpConstants.DOMAIN = PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Ip);
                 TcpConstants.IP = PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Ip);
                 TcpConstants.PORT = Integer.parseInt(PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Port));
+//                if (DeviceUtils.isSimReady(sContext)) {
+//                    int tip = KapnUtil.getAPN(sContext, "30304.mcs");
+//                    if (tip > 0) {
+//                        KapnUtil.setAPN(tip, sContext);
+//                    } else {
+//                        KapnUtil.addAPN("30304.mcs", "30304.mcs", "", "", "", "", "310", "410", sContext);
+//                        int tipRe = MainActivity.apnUtil.getAPN(sContext, "30304.mcs");
+//                        Log.e(Tag,"增加apn");
+//                        KapnUtil.setAPN(tipRe, sContext);
+//                    }
+//                }
                 break;
         }
     }

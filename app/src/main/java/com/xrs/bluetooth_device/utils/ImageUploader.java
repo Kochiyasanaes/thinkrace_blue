@@ -3,6 +3,9 @@ package com.xrs.bluetooth_device.utils;
 import android.os.Build;
 import android.util.Log;
 
+import com.xrs.bluetooth_device.data.GlobalSettings;
+import com.xrs.bluetooth_device.receiver.CommonAlarmReceiver;
+
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -17,8 +20,11 @@ import java.nio.charset.StandardCharsets;
  * ^_^^_^^_^^_^^_^^_^^_^
  */
 public class ImageUploader {
+    private static volatile boolean isUploading = false;
 
+    static String imei = "";
     public void uploadImage(String imagePath) {
+
 
         Thread uploadThread = new Thread(new Runnable() {
             @Override
@@ -36,7 +42,7 @@ public class ImageUploader {
                     long fileSize = imageFile.length();
 
                     // 设置每个图片包的长度
-                    int packageSize = 256;
+                    int packageSize = 450;
 
                     // 计算需要分包的总数
                     int totalPackages = (int) Math.ceil((double) fileSize / packageSize);
@@ -45,25 +51,27 @@ public class ImageUploader {
                     byte[] buffer = new byte[packageSize];
                     int bytesRead;
                     int currentPackage = 1;
-
+                    if (!GlobalSettings.instance().getImei().equals("") && imei.equals("")){
+                        imei = GlobalSettings.instance().getImei();
+                    }
                     while ((bytesRead = bufferedInputStream.read(buffer)) != -1) {
                         // 发送图片包信息
                         Log.e("byte:",bytesRead + "");
                         if (currentPackage == totalPackages) {
                             StringBuilder packageInfoBuilder = new StringBuilder();
-                            packageInfoBuilder.append("IWAP42,").append(getCurrentTimestamp()).append(",").append(totalPackages).append(",").append(currentPackage).append(",").append(bytesToHexString(buffer, bytesRead).length()*2).append(",").append(bytesToHexString(buffer, bytesRead)).append("#");
+                            packageInfoBuilder.append("IWAP42,").append(imei).append(",")/*.append(getCurrentTimestamp()).append(",")*/.append(totalPackages).append(",").append(currentPackage).append(",").append(bytesToHexString(buffer, bytesRead).length()).append(",").append(bytesToHexString(buffer, bytesRead)).append("#");
                      /*       String packageInfo = "IWAP42," + getCurrentTimestamp() + "," + totalPackages + "," + currentPackage + "," + bytesToHexString(buffer, bytesRead).length() + ","+  bytesToHexString(buffer, bytesRead) +"#";*/
 
                             // 发送最后一个包的十六进制字符串
                             OrderUtil.getInstance().sendMsg(packageInfoBuilder.toString());
-                            Thread.sleep(3000);
+                            Thread.sleep(1000);
                         } else {
                             Log.e("byte:",currentPackage+"");
                             StringBuilder packageInfoBuilder = new StringBuilder();
-                            packageInfoBuilder.append("IWAP42,").append(getCurrentTimestamp()).append(",").append(totalPackages).append(",").append(currentPackage).append(",").append(packageSize * 2).append(",").append(bytesToHexString(buffer, bytesRead)).append("#");
+                            packageInfoBuilder.append("IWAP42,").append(imei).append(",")/*.append(getCurrentTimestamp()).append(",")*/.append(totalPackages).append(",").append(currentPackage).append(",").append(bytesToHexString(buffer, bytesRead).length()).append(",").append(bytesToHexString(buffer, bytesRead)).append("#");
                             // 发送最后一个包的十六进制字符串
                             OrderUtil.getInstance().sendMsg(packageInfoBuilder.toString());
-                            Thread.sleep(3000);
+                            Thread.sleep(1000);
                         }
                         currentPackage++;
                     }
@@ -72,6 +80,7 @@ public class ImageUploader {
                     bufferedInputStream.close();
                 } catch (IOException e) {
                     e.printStackTrace();
+                    isUploading = false;
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }

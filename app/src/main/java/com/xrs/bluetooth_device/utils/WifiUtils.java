@@ -7,6 +7,7 @@ import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.util.Log;
 
 import java.util.List;
 
@@ -252,10 +253,19 @@ public class WifiUtils {
     
     //根据SSID判断这个WIFE设置对象是否存在
     private WifiConfiguration IsExsits(String SSID) {
-        List<WifiConfiguration> existingConfigs = mWifiManager
-                .getConfiguredNetworks();
+        if (mWifiManager == null) {
+            Log.e("isExists", "WifiManager is null");
+            return null;
+        }
+
+        List<WifiConfiguration> existingConfigs = mWifiManager.getConfiguredNetworks();
+        if (existingConfigs == null) {
+            Log.e("isExists", "Existing configurations list is null");
+            return null;
+        }
+
         for (WifiConfiguration existingConfig : existingConfigs) {
-            if (existingConfig.SSID.equals("\"" + SSID + "\"")) {
+            if (existingConfig.SSID != null && existingConfig.SSID.equals("\"" + SSID + "\"")) {
                 return existingConfig;
             }
         }

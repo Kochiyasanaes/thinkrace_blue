@@ -8,4 +8,28 @@
     <string name="action_settings">Settings</string>
     <string name="hello_world">Hello world!</string>
     <string name="program_abnormal">Bluetooth software exception</string>
+
+    <string name="gps_test">GpsTest</string>
+    <string name="gps">Test</string>
+    <string name="wear">Wear</string>
+    <string name="meter">Meter</string>
+    <string name="seconds">Seconds</string>
+    <string name="gpsTest">GPS Location</string>
+    <string name="gps_altitude">Altitude:</string>
+    <string name="gps_direction">Direction:</string>
+    <string name="gps_disable">GPS Function Not Activated</string>
+    <string name="gps_dop">Dop:</string>
+    <string name="gps_full_title">GPS Status:</string>
+    <string name="gps_getloc_failed">Failed to Get Geographic Location Information</string>
+    <string name="gps_latitude">Latitude:</string>
+    <string name="gps_longitude">Longitude:</string>
+    <string name="gps_off_btn_text">Switch (Currently Off)</string>
+    <string name="gps_on_btn_text">Switch (Currently On)</string>
+    <string name="gps_pass_rules">Pass Rule: GPS Must Be Fixed</string>
+    <string name="gps_scan_time">Time Cost:</string>
+    <string name="gps_searching">Getting GPS Information...</string>
+    <string name="gps_speed">Speed:</string>
+    <string name="gps_star_count">Stars:</string>
+    <string name="gps_test_on_off">GPS Test (With Switch)</string>
+    <string name="TouchScreen">Touch Screen</string>
 </resources>

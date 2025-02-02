@@ -2,10 +2,10 @@ ext {
 
     android = [
             compileSdkVersion: 30,
-            minSdkVersion    : 18,
-            targetSdkVersion : 23,
+            minSdkVersion    : 19,
+            targetSdkVersion : 28,
             versionCode      : 10,
-            versionName      : "1.1.0"//当前APP版本号
+            versionName      : "1.2.0"//当前APP版本号
     ]
 
     dao_version_code = 1//当前数据库版本号(更新计步 翻转数据库)

@@ -78,7 +78,11 @@ public class OrderUtil {
                         Log.e("thread","崩溃拉");
                     }
                     mManager.send(new HandShake()); //握手-登录包
-                    mManager.getPulseManager().setPulseSendable(new PulseBean()); //心跳包(亮屏才有效？)
+                    try {
+                        mManager.getPulseManager().setPulseSendable(new PulseBean()); //心跳包(亮屏才有效？)
+                    }catch (Exception e){
+                        Log.e("OrderUtils : ",e.toString());
+                    }
                 }
             }).start();
 
@@ -408,7 +412,6 @@ public class OrderUtil {
          if(potocol.equals("TCP")){
              MsgDataBean msgDataBean = new MsgDataBean(msg);
              if (mManager != null && mManager.isConnect()) {
-                 Log.e("APWL",msg);
 //            SL.e(msg + "      正在发送中...");
                  mManager.send(msgDataBean);
              } else {

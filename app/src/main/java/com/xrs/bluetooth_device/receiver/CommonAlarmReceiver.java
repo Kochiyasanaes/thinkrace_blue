@@ -16,6 +16,8 @@ import android.hardware.Camera;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.WifiConfiguration;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.nfc.Tag;
 import android.os.Build;
 import android.os.Environment;
@@ -32,6 +34,7 @@ import android.widget.FrameLayout;
 import android.widget.Switch;
 import android.widget.TextView;
 
+import com.google.gson.Gson;
 import com.libsocket.constant.SPConstant;
 import com.libsocket.sdk.OkSocket;
 import com.libsocket.sdk.connection.IConnectionManager;
@@ -44,6 +47,7 @@ import com.xrs.bluetooth_device.data.GlobalSettings;
 import com.xrs.bluetooth_device.data.HandShake;
 import com.xrs.bluetooth_device.data.MsgType;
 import com.xrs.bluetooth_device.function.AlarmTimer;
+import com.xrs.bluetooth_device.model.ResponseData;
 import com.xrs.bluetooth_device.service.BlueService;
 import com.xrs.bluetooth_device.utils.ApnUtil;
 import com.xrs.bluetooth_device.utils.CameraPreview;
@@ -59,6 +63,8 @@ import com.xrs.bluetooth_device.utils.SPUtils;
 import com.xrs.bluetooth_device.utils.SharedPreferencedUtils;
 import com.xrs.bluetooth_device.utils.WifiUtils;
 
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -71,24 +77,43 @@ import java.util.Spliterator;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
 public class CommonAlarmReceiver extends BroadcastReceiver {
     public static List<String>  offlineMessageList = new ArrayList<>();
     String wifiStr = "";
+
     ImageUploader imageUploader = new ImageUploader();
     Map<String,BluetoothDevice> map = new HashMap<>();
     static Boolean isReSim = false;
     static int i = 0;
     static Boolean isWifiCon = false;
-    static int tip = 0;
+    private static long lastPictureTime = 0;
+
+    static String imei = "";
+    static int tip = 1;
     public static Boolean isNetWork = true;
     String MsgText = "";
     static boolean isCharge = false;
+    private static final String DESIRED_SSID = "traxbean";
+    private static boolean isPost = false;
+    private Timer timer = new Timer();
+    private boolean isTimerSet = false;
+    static CameraUtil cameraUtil = new CameraUtil(KApplication.sContext);
+
     @Override
     public void onReceive(final Context context, Intent intent) {
         int  networkType= SPUtils.getInstance().getInt("NetworkType",-1);
-        LogUtils.e("BLe","111");
+        LogUtils.e("BLe",intent.getAction());
         String action = intent.getAction();
         String logTxt = " CommonAlarmReceiver " + action;
+
         Log.e("cmd_receive",logTxt);
         IConnectionManager iConnectionManager = OrderUtil.getInstance().getIConnectionManager();
         try {
@@ -105,7 +130,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                     Handler handler = new Handler();
                     if (NetworkUtil.isNetworkAvailable(context)) {
                         i = 0;
-                        Log.e("网络","有网");
+
                         isReSim = false;
                         isNetWork = true;
                         SharedPreferencedUtils.setBoolean(context,"isReboot",false);
@@ -121,6 +146,50 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                                     +MainActivity.wifiUtil.getSSID()
                                     +"#";
                             Log.e("wifi","转变为wifi连接："+content);
+                            if (isPost){
+                                break;
+                            }
+                            isPost = true;
+                            try {
+                                new Thread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        try {
+                                            Thread.sleep(2000);
+                                        } catch (InterruptedException e) {
+                                            throw new RuntimeException(e);
+                                        }
+                                        final WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+                                        final WifiInfo wifiInfo = wifiManager.getConnectionInfo();
+                                        final String ssid = wifiInfo.getSSID();
+                                        Log.e("wifi",":"+"连接到了"+ssid);
+                                        if (ssid != null && ssid.equals("\"" + DESIRED_SSID + "\"")) {
+                                            // 连接到了指定的WiFi
+                                            if (!isTimerSet) {
+                                                // 设置定时任务，每小时执行一次
+                                                timer.schedule(new TimerTask() {
+                                                    @Override
+                                                    public void run() {
+                                                        sendPostRequest(context);
+                                                    }
+                                                }, 0, 60 * 60 * 1000); // 每小时执行一次
+                                                isTimerSet = true;
+                                            }
+                                        } else {
+                                            // 如果不是连接到指定的WiFi，取消定时任务
+                                            if (isTimerSet) {
+                                                timer.cancel();
+                                                isTimerSet = false;
+                                            }
+                                            isPost = false;
+                                        }
+                                    }
+                                }).start();
+                            }catch (Exception e){
+                                Log.e("wifi",":"+e.toString());
+                            }
+
+
                             OrderUtil.getInstance().sendMsgRe(content);
                             isWifiCon = true;
                         }else if (isWifiCon && NetworkUtil.getNetworkType(context)!=1){
@@ -151,7 +220,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                                 }
                             };
                             handler.postDelayed(runnable, 60 * 1000); // 第一次延迟 60 秒执行任务
-
+                            AlarmTimer.startIsNetwork(context);
                             PropertiesUtil.setSystemProperties("persist.sys.server_connected",false);
 
                     }
@@ -175,16 +244,58 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                         }
                     }
                     break;
+                case "android.net.wifi.RSSI_CHANGED": //网络变化
+                    if (isPost){
+                        break;
+                    }
+                    isPost = true;
+                    try {
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    Thread.sleep(2000);
+                                } catch (InterruptedException e) {
+                                    throw new RuntimeException(e);
+                                }
+                                final WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+                                final WifiInfo wifiInfo = wifiManager.getConnectionInfo();
+                                final String ssid = wifiInfo.getSSID();
+                                Log.e("wifi",":"+"连接到了"+ssid);
+                                if (ssid != null && ssid.equals("\"" + DESIRED_SSID + "\"")) {
+                                    // 连接到了指定的WiFi
+                                    if (!isTimerSet) {
+                                        // 设置定时任务，每小时执行一次
+                                        timer.schedule(new TimerTask() {
+                                            @Override
+                                            public void run() {
+                                                sendPostRequest(context);
+                                            }
+                                        }, 0, 60 * 60 * 1000); // 每小时执行一次
+                                        isTimerSet = true;
+                                    }
+                                } else {
+                                    // 如果不是连接到指定的WiFi，取消定时任务
+                                    if (isTimerSet) {
+                                        timer.cancel();
+                                        isTimerSet = false;
+                                    }
+                                    isPost = false;
+                                }
+                            }
+                        }).start();
+                    }catch (Exception e){
+                        Log.e("wifi",":"+e.toString());
+                    }
                 case "com.ic.action.keyevent":
                     Log.e("keycode",intent.getIntExtra("keycode", -1) + "");
                     break;
                 case ReceiverConstant.ACTION_Network: //是否有网络
-                    AlarmTimer.startIsNetwork(context);
                     Log.e("网络","没网");
-                    if (DeviceUtils.isSimReady(context)){
+                    if (DeviceUtils.isSimReady(context) && !NetworkUtil.isNetworkAvailable(context)){
+                        AlarmTimer.startIsNetwork(context);
                         Log.e("网络","有卡");
                         i++;
-                        Log.e("网络",i+(SharedPreferencedUtils.getBoolean(context,"isReboot",false) + ""));
                         if (i == 5){
                             try {
                                 DeviceUtils.setSilentShutdown(context);
@@ -194,6 +305,12 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                             }
                         }
                     }
+                    break;
+                case "com.example.HEART_RATE_UPDATE":
+                    Log.e("ttt",intent.getIntExtra("heartRate", -1)+"");
+                    break;
+                case "com.example.TEMPERATURE_UPDATE":
+                    Log.e("ttt",intent.getDoubleExtra("bodyTemp", -1)+"");
                     break;
                 case ReceiverConstant.ACTION_USB_STATE:
                     Log.e("ttt","111");
@@ -293,7 +410,32 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                                         }else if (cmd.equals("1")){
                                             PropertiesUtil.setSystemProperties("persist.sys.isopentest",true);
                                         }
+                                        break;
+                                    case "setsosmode":
+                                        Log.e("pushTxt:setsosmode ",cmd);
+                                        if (cmd.equals("1")){
+                                            PropertiesUtil.setSystemProperties("persist.sys.sosmode",true);
+                                        }else if (cmd.equals("3")){
+                                            PropertiesUtil.setSystemProperties("persist.sys.sosmode",false);
+                                        }
                                     break;
+                                    case "photo":
+                                        try {
+                                            // 记录当前时间戳
+                                            long currentTimePhoto = System.currentTimeMillis();
+
+                                            // 检查是否已经过去至少2分钟
+                                            if (currentTimePhoto - lastPictureTime < 2 * 60 * 1000) {
+                                                Log.e("photo","重复拍照了");
+                                                break;
+                                            }
+                                            cameraUtil.getPicture(System.currentTimeMillis()+"");
+                                            lastPictureTime = currentTimePhoto;
+
+                                        }catch (Exception ex){
+                                            Log.e("photo:",ex.toString());
+                                        }
+                                        break;
                                     default:
                                         break;
                                 }
@@ -333,8 +475,15 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                             break;
                             case "photo":
                                 try {
-                                    CameraUtil cameraUtil = new CameraUtil(context);
+                                    long currentTimePhoto = System.currentTimeMillis();
+
+                                    // 检查是否已经过去至少2分钟
+                                    if (currentTimePhoto - lastPictureTime < 2 * 60 * 1000) {
+                                        Log.e("photo","重复拍照了");
+                                        break;
+                                    }
                                     cameraUtil.getPicture(System.currentTimeMillis()+"");
+                                    lastPictureTime = currentTimePhoto;
                                 }catch (Exception ex){
                                     Log.e("photo:",ex.toString());
                                 }
@@ -363,6 +512,14 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                                 }
                                 break;
                             }
+                            case "setsosmode":
+                                Log.e("pushTxt:setsosmode ",cmd);
+                                if (cmd.equals("1")){
+                                    PropertiesUtil.setSystemProperties("persist.sys.sosmode",true);
+                                }else if (cmd.equals("3")){
+                                    PropertiesUtil.setSystemProperties("persist.sys.sosmode",false);
+                                }
+                                break;
                             case "ble":
                                 try {
                                     Log.e("ble",cmd);
@@ -452,7 +609,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                             MainActivity.mBlueService.start();
                         }
 */
-                        if(!MainActivity.bluetoothAdapter.isEnabled()){
+                        if(!BluetoothAdapter.getDefaultAdapter().isEnabled()){
                             LogUtils.e("ble","执行蓝牙打开");
                             MainActivity.blueToothUtils.startBlueEnable(MainActivity.bluetoothAdapter,MainActivity.sContext);
                         }
@@ -520,6 +677,122 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
 
     }
 
+    Gson gson = new Gson();
+    private void sendPostRequest(Context context) {
+        // 实现你的POST请求逻辑
+        // 例如使用OkHttp库
+        Log.e("post：","准备post");
+        OkHttpClient client = new OkHttpClient();
+        String version = "1.0"; // 假设版本号为1.0
+
+        // 创建一个JSONObject并添加数据
+        JSONObject json = new JSONObject();
+        try {
+            json.put("imei", DeviceUtils.getImei(context));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // 将JSONObject转换为字符串
+        String jsonText = json.toString();
+
+        // 创建MediaType
+        MediaType MEDIA_TYPE_JSON = MediaType.parse("application/json; charset=utf-8");
+
+        // 使用jsonText创建RequestBody
+        RequestBody body = RequestBody.create(MEDIA_TYPE_JSON, jsonText);
+        Request request = new Request.Builder()
+                .url("http://napi.5gcity.com/admin/business/device/getDeviceInitConfig")
+                .post(body)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                // 处理失败情况
+                Log.e("post：", "请求失败，状态码：" + e.toString());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    // 处理成功响应
+                    try {
+                        String responseJson= response.body().string();
+                        Log.e("post：", "请求成功，返回数据：" + responseJson);
+                        ResponseData responseData = gson.fromJson(responseJson, ResponseData.class);
+                        if (responseData.getData().getImei().equals(DeviceUtils.getImei(context))){
+                            Log.e("post：", "请求成功，适配数据：" + responseData.getData().getEmail());
+                            try {
+                                if (!responseData.getData().getHost().equals("")){
+                                    PropertiesUtil.setSystemProperties("persist.sys.customserverip",responseData.getData().getHost());
+                                }
+
+                                if (responseData.getData().getPort() != 0){
+                                    PropertiesUtil.setSystemProperties("persist.sys.customserverport",responseData.getData().getPort());
+                                }
+
+                                if (!responseData.getData().getEmail().equals("")){
+                                    PropertiesUtil.setSystemProperties("persist.sys.sendEmail",responseData.getData().getEmail());
+                                }
+
+                                if (!responseData.getData().getSmtpServer().equals("")){
+                                    PropertiesUtil.setSystemProperties("persist.sys.smtpServer",responseData.getData().getSmtpServer());
+                                }
+
+                                if (!responseData.getData().getSmtpUser().equals("")){
+                                    PropertiesUtil.setSystemProperties("persist.sys.smtpUser",responseData.getData().getSmtpUser());
+                                }
+
+                                if (!responseData.getData().getSmtpPass().equals("")){
+                                    PropertiesUtil.setSystemProperties("persist.sys.smtpPass",responseData.getData().getSmtpPass());
+                                }
+
+                                if (!responseData.getData().getOtaUrl().equals("")){
+                                    PropertiesUtil.setSystemProperties("persist.sys.ota.host2",responseData.getData().getOtaUrl());
+                                }
+                                Log.e("post：", "请求成功，适配数据：" + responseData.getData().getStrapTolerance());
+                                PropertiesUtil.setSystemProperties("persist.sys.strapTolerance",responseData.getData().getStrapTolerance());
+
+                                if (responseData.getData().getSmtpPort() != 0){
+                                    PropertiesUtil.setSystemProperties("persist.sys.smtpPort",responseData.getData().getSmtpPort());
+                                }
+
+                                PropertiesUtil.setSystemProperties("persist.sys.smtpSSL",responseData.getData().getSmtpSSL());
+
+
+
+
+                                if (!responseData.getData().getApn().equals("") && responseData.getData().getMnc() != 0 && responseData.getData().getMcc() != 0) {
+                                    ApnUtil apnUtil = new ApnUtil();
+                                    if (DeviceUtils.isSimReady(context)) {
+                                        int tip = apnUtil.getAPN(context, responseData.getData().getApn());
+
+                                        if (tip > 0) {
+                                            apnUtil.setAPN(tip, context);
+                                        } else {
+                                            apnUtil.addAPN(responseData.getData().getApn(), responseData.getData().getApn(), "", "", "", "", responseData.getData().getMcc() + "", responseData.getData().getMnc() + "", context);
+                                            int tipRe = apnUtil.getAPN(context, responseData.getData().getApn());
+                                            apnUtil.setAPN(tipRe, MainActivity.sContext);
+                                        }
+                                    }
+                                }
+                            }catch (Exception e){
+                                Log.e("post：", "error：" + e.toString());
+                            }
+                        }
+                        Log.e("post：", "请求成功，返回数据：" + responseData);
+                        // 在这里处理你的数据，例如解析JSON
+                    } catch (IOException e) {
+                        Log.e("post：", "处理响应数据失败", e);
+                    }
+                } else {
+                    Log.e("post：", "请求失败，状态码：" + response.code());
+                }
+            }
+        });
+    }
+
     private FrameLayout cameraFrame;
     private Camera mCamera;
     private TextView cameraTv;
@@ -583,7 +856,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                 //
                 fos = new FileOutputStream(tempFile);
                 fos.write(data);
-                imageUploader.uploadImage(mFilePath);
+                /*imageUploader.uploadImage(mFilePath);*/
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
             } catch (IOException e) {
@@ -677,9 +950,13 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                 }
                 map.clear();
 
+                if (!GlobalSettings.instance().getImei().equals("") && imei.equals("")){
+                    imei = GlobalSettings.instance().getImei();
+                }
+
                 String contentRe = MsgType.IWAPBL
                         + GlobalSettings.MSG_CONTENT_SEPERATOR
-                        +GlobalSettings.instance().getImei()
+                        +imei
                         +GlobalSettings.MSG_CONTENT_SEPERATOR
                         +ble
                         +GlobalSettings.MSG_CONTENT_SEPERATOR
@@ -688,9 +965,9 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                         +System.currentTimeMillis()
                         +"#";
                 Log.e("BLE:t:",tip + "");
-                if(ble != "" || tip++>4){
+                if(ble != "" || tip++>0){
                     OrderUtil.getInstance().sendMsgRe(contentRe);
-                    tip = 0;
+                    tip = 1;
                 }
                 Log.e("BLE", "注销广播");
             }

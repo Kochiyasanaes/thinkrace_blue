@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.CALL_PHONE"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     //网络
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -52,7 +54,8 @@
         android:label="Bluetooth_Tool"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-       >
+        android:networkSecurityConfig="@xml/network_security_config"
+        >
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -69,7 +72,7 @@
 
         <receiver android:name=".receiver.BluetoothConnectActivityReceiver" >
             <intent-filter android:priority="1000">
-                <action android:name="android.bluetooth.device.action.PAIRING_REQUEST" />
+                <action android:name="android.bluetooth.device.action.PAIRING_REQUEST" />c
             </intent-filter>
         </receiver>
 
@@ -89,6 +92,8 @@
                 <action android:name="com.thinkrace.intent.ACTION_ALARM_CONFIRMED_Ble_IsOpen" />
                 <action android:name="com.thinkrace.intent.ACTION_LOG" />
                 <action android:name="com.xrs.WEAR" />
+                <action android:name="android.net.wifi.RSSI_CHANGED"/>
+                <action android:name="android.net.wifi.STATE_CHANGE"/>
                 <action android:name="com.thinkrace.intent.HEARTBEAT" />
                 <action android:name="com.thinkrace.intent.ACTION_Network" />
                 <action android:name="com.enqualcomm.support.local_sos" />
@@ -100,6 +105,8 @@
                 <action android:name="android.hardware.usb.action.USB_STATE"/>
                 <action android:name="com.ic.action.keyevent"/>
                 <action android:name="action.ic.srvPushTxt"/>
+                <action android:name="com.example.HEART_RATE_UPDATE"/>
+                <action android:name="com.example.TEMPERATURE_UPDATE"/>
             </intent-filter>
         </receiver>
 

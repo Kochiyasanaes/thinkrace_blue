@@ -9,6 +9,7 @@ import android.hardware.Camera;
 import android.media.ToneGenerator;
 import android.os.Environment;
 import android.os.StatFs;
+import android.util.Log;
 import android.view.SurfaceView;
 import android.view.WindowManager;
 
@@ -99,14 +100,18 @@ public class CameraUtil implements SurfaceTexture.OnFrameAvailableListener {
     }
 
     private String savePicture(byte[] paramArrayOfByte) {
-
         int jpg_quality = 50;
         String str = null;
         try {
             if (Environment.getExternalStorageState().equals("mounted")) {
-                if ((new StatFs(Environment.getExternalStorageDirectory().toString())).getAvailableBytes() < paramArrayOfByte.length)
-                    return null;
+
+                long availableBytes = new StatFs(Environment.getExternalStorageDirectory().toString()).getAvailableBytes();
                 str = MainActivity.sContext.getFilesDir() + "";
+                clearDirectory(MainActivity.sContext.getFilesDir());
+                if (availableBytes < paramArrayOfByte.length) {
+                    return null; // 存储空间不足
+                }
+
 
                 StringBuilder stringBuilder = new StringBuilder();
                 stringBuilder.append(str);
@@ -117,44 +122,38 @@ public class CameraUtil implements SurfaceTexture.OnFrameAvailableListener {
                 Bitmap bitmap1 = BitmapFactory.decodeByteArray(paramArrayOfByte, 0, paramArrayOfByte.length);
                 Bitmap bitmap2 = bitmap1;
 
-
-//        if ((this.context.getResources().getConfiguration()).orientation == 1) {
-                custom_camera_mirror = 0;
+                // 移除了所有关于custom_camera_mirror的逻辑
                 Matrix matrix = new Matrix();
+
                 matrix.reset();
                 switch (custom_camera_orientation) {
                     case 90:
                     case 270:
-                        matrix.postRotate(custom_camera_orientation);
-                        if (custom_camera_mirror == -1)
-                            matrix.postScale(-1, 1);
-                        else if (custom_camera_mirror == -2)
-                            matrix.postScale(1, -1);
-
-                        bitmap2 = Bitmap.createBitmap(bitmap1, 0, 0, bitmap1.getWidth(), bitmap1.getHeight(), matrix, true);
+                  /*      matrix.postRotate(custom_camera_orientation);
+                        bitmap2 = Bitmap.createBitmap(bitmap1, 0, 0, bitmap1.getWidth(), bitmap1.getHeight(), matrix, true);*/
                         break;
                     case 0:
                     case 180:
-                        if (custom_camera_mirror < 0) {
-                            if (custom_camera_mirror == -1)
-                                matrix.postScale(-1, 1);
-                            else if (custom_camera_mirror == -2)
-                                matrix.postScale(1, -1);
-                            bitmap2 = Bitmap.createBitmap(bitmap1, 0, 0, bitmap1.getWidth(), bitmap1.getHeight(), matrix, true);
-                        }
+                        // 这里不再有镜像操作
+                        break;
                     default:
                         break;
                 }
 
-                Bitmap bitmap3 = bitmap2;
-         /*       if (Config.needWaterMark()) {
-                    bitmap3 = ImageUtil.drawTextToLeftTop(this.context, bitmap2, TimeUtil.getSystemTimeForCameraMark(), 50, Color.RED, 25, 25);
-                }*/
+
+                matrix.setScale(-1, 1); // 这是水平镜像变换
+                matrix.postTranslate(-bitmap2.getWidth(), 0); // 移动图片使其回到视图内
+                matrix.postRotate(270); // 逆时针旋转90度
+
+                bitmap2 = Bitmap.createBitmap(bitmap2, 0, 0, bitmap2.getWidth(), bitmap2.getHeight(), matrix, true);
+
+                // 保存图片
                 File file = new File(str);
-                if (!file.exists())
+                if (!file.exists()) {
                     file.createNewFile();
+                }
                 BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(file));
-                bitmap3.compress(Bitmap.CompressFormat.JPEG, jpg_quality, bufferedOutputStream);
+                bitmap2.compress(Bitmap.CompressFormat.JPEG, jpg_quality, bufferedOutputStream);
                 bufferedOutputStream.flush();
                 bufferedOutputStream.close();
 
@@ -164,6 +163,21 @@ public class CameraUtil implements SurfaceTexture.OnFrameAvailableListener {
         } catch (Exception e) {
             e.printStackTrace();
             return null;
+        }
+    }
+
+    private void clearDirectory(File directory) {
+        if (directory.isDirectory()) {
+            String[] items = directory.list();
+            for (String item : items) {
+                File file = new File(directory, item);
+                if (file.isFile()) {
+                    if (!file.delete()) {
+                        // 如果文件无法删除，可以选择记录日志或者抛出异常
+                        Log.e("TAG", "Could not delete file: " + file.getAbsolutePath());
+                    }
+                }
+            }
         }
     }
 
@@ -252,29 +266,25 @@ public class CameraUtil implements SurfaceTexture.OnFrameAvailableListener {
         LogUtils.i("camera onFrameAvailable");
     }
 
-    public void setCameraDisplayOrientation(Context paramContext, int paramInt, Camera paramCamera) {
+    public void setCameraDisplayOrientation(Context context, int cameraId, Camera camera) {
         Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
-        Camera.getCameraInfo(paramInt, cameraInfo);
-        paramInt = getDisplayRotation(paramContext);
-        custom_camera_orientation = 0;
-        LogUtils.i("camera getDisplayRotation1 " + paramInt + " cameraInfo.orientation " + cameraInfo.orientation + " custom_camera_orientation " + custom_camera_orientation);
+        Camera.getCameraInfo(cameraId, cameraInfo);
+        int rotation = getDisplayRotation(context); // 获取设备当前方向
 
-        if (cameraInfo.facing == 1) {
-            paramInt = (360 - (custom_camera_orientation + paramInt) % 360) % 360;
-        } else {
-            paramInt = (custom_camera_orientation - paramInt + 360) % 360;
+        // 计算相机预览的方向
+        int degrees = 0;
+        if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+            // 前置摄像头
+            // 需要反转方向，因为前置摄像头的自然方向与设备的方向相反
+            degrees = (cameraInfo.orientation - rotation + 360) % 360;
+        } else { // 后置摄像头
+            // 直接使用相机的方向，但需要根据设备的当前方向进行调整
+            degrees = (cameraInfo.orientation + rotation) % 360;
         }
-        /*
-    if (cameraInfo.facing == 1) {
-      paramInt = (360 - (cameraInfo.orientation + paramInt) % 360) % 360;
-    } else {
-      paramInt = (cameraInfo.orientation - paramInt + 360) % 360;
-    }*/
 
-        LogUtils.i("camera final display orientation " + paramInt);
-
-        paramCamera.setDisplayOrientation(paramInt);
-        this.mOrientation = paramInt;
+        // 设置相机预览的方向
+        camera.setDisplayOrientation(degrees);
+        LogUtils.i("Camera display orientation set to: " + degrees);
     }
 }
 

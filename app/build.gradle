@@ -5,6 +5,12 @@ plugins {
 android {
     compileSdkVersion rootProject.ext.android.compileSdkVersion
 
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/libs']
+        }
+    }
     defaultConfig {
         applicationId "com.xrs.bluetooth_device"
         minSdkVersion rootProject.ext.android.minSdkVersion
@@ -49,7 +55,12 @@ android {
             keyAlias = 'watch_g5'
             keyPassword '123456'
         }
-
+/*        debug {
+            storeFile file('platform_debug.keystore')
+            storePassword 'android'
+            keyAlias = 'platform'
+            keyPassword 'android'
+        }*/
       /*  debug {
             storeFile file('wangwei.jks')
             storePassword 'android'
