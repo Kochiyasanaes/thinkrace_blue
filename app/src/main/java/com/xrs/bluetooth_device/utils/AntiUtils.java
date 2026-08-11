@@ -42,11 +42,11 @@ public class AntiUtils {
 
         public static final int STATUS_CUT_OFF = 12; //12 表示表带非法解锁
         public static final int STATUS_LOCK_ON = 2; // 2 表示表带 锁定
-
         @Override
         public void onSensorChanged(SensorEvent sensorEvent) {
             int event = (int) sensorEvent.values[0];
             if(event==2 || event == 12){
+
                 current_cut_status = event;
                 cut_status_event_reported++;
                 Log.d(TAG,"近距离 " + current_cut_status + " sensor event " + cut_status_event_reported + " times !");

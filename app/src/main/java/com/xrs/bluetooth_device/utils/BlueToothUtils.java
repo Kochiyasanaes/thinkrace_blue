@@ -17,28 +17,20 @@ public class BlueToothUtils {
 
     public void startBlueEnable(BluetoothAdapter bluetoothAdapter, Context context){
         //检测是否有蓝牙
-        Log.e("" +
-                " ","start");
         if(bluetoothAdapter == null){
 
             return;
         }
         //蓝牙如果已经开启则直接返回
         if (bluetoothAdapter.isEnabled()){
-            Log.e("" +
-                    " ","有蓝牙");
             ensureDiscoverable(bluetoothAdapter);
             //setDiscoverableTimeout(bluetoothAdapter);
             return;
         }
-        Log.e("" +
-                " ","blue1");
         //开始蓝牙
         try {
             bluetoothAdapter.enable();
             Thread.sleep(5000);
-            Log.e("" +
-                    " ","blue2");
         }catch (Exception exception){
             Log.e("msg:blue",exception+"");
         }

@@ -184,6 +184,8 @@ public class WifiUtils {
 
     }
 
+
+
     public WifiConfiguration createWifiInfo(String SSID, String Password,
                                             int TYPE) {
         WifiConfiguration config = new WifiConfiguration();
@@ -252,7 +254,7 @@ public class WifiUtils {
     }
     
     //根据SSID判断这个WIFE设置对象是否存在
-    private WifiConfiguration IsExsits(String SSID) {
+    public WifiConfiguration IsExsits(String SSID) {
         if (mWifiManager == null) {
             Log.e("isExists", "WifiManager is null");
             return null;

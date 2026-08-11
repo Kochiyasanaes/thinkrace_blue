@@ -363,8 +363,8 @@ public class OrderUtil {
         SL.e("startSocket");
         String potocol = sp.getString(SPConstant.CURRENT_WICHE_PORT, "TCP");
         if(potocol.equals("TCP")){
-            domainName=sp.getString(SPConstant.CURRENT_IP, TcpConstants.DOMAIN);
-            port = sp.getInt(SPConstant.CURRENT_PORT, TcpConstants.PORT);
+            domainName=TcpConstants.DOMAIN;
+            port = TcpConstants.PORT;
             getIP(domainName);
             SL.e("startSocket");
         }

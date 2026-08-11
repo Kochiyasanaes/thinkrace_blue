@@ -5,7 +5,7 @@
     android:sharedUserId="android.uid.system"
     android:installLocation="internalOnly"
    >
-
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.GET_TASKS" />
     <uses-permission android:name="android.permission.INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -19,7 +19,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REBOOT" />
     //震动
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.READ_PRIVILEGED_PHONE_STATE" />
     <uses-permission android:name="android.permission.VIBRATE"/>
@@ -33,10 +32,13 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS"/>
 
+    <uses-permission android:name="android.permission.SIP" />
+    <uses-permission android:name="android.permission.VOIP_CALL_WIDTHDRAW" />
     <!--蓝牙-->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.MODIFY_PHONE_STATE"/>
     <!--wifi-->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -46,7 +48,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_SMS" />
-
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <application
         android:name=".KApplication"
         android:allowBackup="true"
@@ -54,6 +56,7 @@
         android:label="Bluetooth_Tool"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config"
         >
         <activity
@@ -67,8 +70,16 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".BluetoothScanActivity"
+            android:label="附近蓝牙"
+            android:screenOrientation="portrait" />
+
           <service android:name=".service.NotificationService" android:exported="true">
         </service>
+        <meta-data
+            android:name="TencentMapSDK"
+            android:value="NORBZ-L2J3W-CW4RR-YNS5C-OTM27-ATBYU"/>
 
         <receiver android:name=".receiver.BluetoothConnectActivityReceiver" >
             <intent-filter android:priority="1000">
@@ -104,7 +115,8 @@
                 <action android:name="com.xrs.CMD"/>
                 <action android:name="android.hardware.usb.action.USB_STATE"/>
                 <action android:name="com.ic.action.keyevent"/>
-                <action android:name="action.ic.srvPushTxt"/>
+                <action android:name="com.ic.action.keyevent"/>
+                <action android:name="com.xrs.bluetooth_device.SCANCODE_EVENT"/>
                 <action android:name="com.example.HEART_RATE_UPDATE"/>
                 <action android:name="com.example.TEMPERATURE_UPDATE"/>
             </intent-filter>

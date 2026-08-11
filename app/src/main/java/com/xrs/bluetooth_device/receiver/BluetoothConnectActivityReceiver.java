@@ -13,7 +13,6 @@ import com.xrs.bluetooth_device.utils.ClsUtils;
 public class BluetoothConnectActivityReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        Log.e("msg:","run");
         if ("android.bluetooth.device.action.PAIRING_REQUEST".equals(intent.getAction())) {
             BluetoothDevice mBluetoothDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
             try {

@@ -20,6 +20,7 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.nfc.Tag;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
@@ -29,6 +30,7 @@ import android.provider.Settings;
 import android.support.annotation.RequiresApi;
 import android.telephony.SmsMessage;
 import android.text.TextUtils;
+import android.util.Base64;
 import android.util.Log;
 import android.widget.FrameLayout;
 import android.widget.Switch;
@@ -36,12 +38,14 @@ import android.widget.TextView;
 
 import com.google.gson.Gson;
 import com.libsocket.constant.SPConstant;
+import com.libsocket.constant.TcpConstants;
 import com.libsocket.sdk.OkSocket;
 import com.libsocket.sdk.connection.IConnectionManager;
 import com.xrs.bluetooth_device.KApplication;
 import com.xrs.bluetooth_device.MainActivity;
 import com.xrs.bluetooth_device.R;
 import com.xrs.bluetooth_device.constant.BleConstant;
+import com.xrs.bluetooth_device.constant.PropertiesConstant;
 import com.xrs.bluetooth_device.constant.ReceiverConstant;
 import com.xrs.bluetooth_device.data.GlobalSettings;
 import com.xrs.bluetooth_device.data.HandShake;
@@ -52,8 +56,11 @@ import com.xrs.bluetooth_device.service.BlueService;
 import com.xrs.bluetooth_device.utils.ApnUtil;
 import com.xrs.bluetooth_device.utils.CameraPreview;
 import com.xrs.bluetooth_device.utils.CameraUtil;
+
+import com.xrs.bluetooth_device.utils.ChaCha20Poly1305Util;
 import com.xrs.bluetooth_device.utils.DeviceUtils;
 import com.xrs.bluetooth_device.utils.FileUtil;
+import com.xrs.bluetooth_device.utils.ICLogger;
 import com.xrs.bluetooth_device.utils.ImageUploader;
 import com.xrs.bluetooth_device.utils.LogUtils;
 import com.xrs.bluetooth_device.utils.NetworkUtil;
@@ -69,6 +76,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -76,6 +84,7 @@ import java.util.Map;
 import java.util.Spliterator;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -86,7 +95,7 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class CommonAlarmReceiver extends BroadcastReceiver {
-    public static List<String>  offlineMessageList = new ArrayList<>();
+    public static List<String>  offlineMessageList = new CopyOnWriteArrayList<>();
     String wifiStr = "";
 
     ImageUploader imageUploader = new ImageUploader();
@@ -288,7 +297,12 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                         Log.e("wifi",":"+e.toString());
                     }
                 case "com.ic.action.keyevent":
-                    Log.e("keycode",intent.getIntExtra("keycode", -1) + "");
+                    Bundle extras = intent.getExtras();
+                    if (extras != null) {
+                        for (String key : extras.keySet()) {
+                            Log.e("EXTRA", key + " = " + extras.get(key));
+                        }
+                    }
                     break;
                 case ReceiverConstant.ACTION_Network: //是否有网络
                     Log.e("网络","没网");
@@ -308,6 +322,9 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                     break;
                 case "com.example.HEART_RATE_UPDATE":
                     Log.e("ttt",intent.getIntExtra("heartRate", -1)+"");
+                    break;
+                case "com.xrs.bluetooth_device.SCANCODE_EVENT":
+                    Log.e("tttfff",intent.getIntExtra("scanCode", -1)+"");
                     break;
                 case "com.example.TEMPERATURE_UPDATE":
                     Log.e("ttt",intent.getDoubleExtra("bodyTemp", -1)+"");
@@ -375,6 +392,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                                             Log.e("ble",cmd);
                                             if (cmd.equals("0")){
                                                 SharedPreferencedUtils.setString(context,"isOpen","0");
+                                                PropertiesUtil.setSystemProperties("persist.sys.ble.enable","0");
                                                 BleConstant.Ble_Is30S = false;
                                                 if (MainActivity.bluetoothAdapter != null){
                                                     MainActivity.bluetoothAdapter.disable();
@@ -391,6 +409,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
 
                                                 OrderUtil.getInstance().stopSocket();
                                             }else {
+                                                PropertiesUtil.setSystemProperties("persist.sys.ble.enable","1");
                                                 if (SharedPreferencedUtils.getString(context,"isOpen","0").equals("0")){
                                                     SharedPreferencedUtils.setString(context,"isOpen","1");
                                                 }
@@ -409,6 +428,31 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                                             PropertiesUtil.setSystemProperties("persist.sys.isopentest",false);
                                         }else if (cmd.equals("1")){
                                             PropertiesUtil.setSystemProperties("persist.sys.isopentest",true);
+                                        }
+                                        break;
+                                    case "networkloc":
+                                        Log.e("pushTxt:networkloc ",cmd);
+                                        if (cmd.equals("0")){
+                                            PropertiesUtil.setSystemProperties("persist.sys.isnetworkopen","0");
+                                        }else if (cmd.equals("1")){
+                                            PropertiesUtil.setSystemProperties("persist.sys.isnetworkopen","1");
+                                        }
+                                        break;
+                                    case "sdkkey":
+                                        PropertiesUtil.setSystemProperties("persist.sys.network.tencentsdkkey",cmd);
+                                        break;
+                                    case "ipchange":
+                                        TcpConstants.DOMAIN = PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Ip);
+                                        TcpConstants.IP = PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Ip);
+                                        TcpConstants.PORT = Integer.parseInt(PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Port));
+                                        OrderUtil.getInstance().stopSocket();
+                                        OrderUtil.getInstance().startSocket();
+                                        break;
+                                    case "setblehistory":
+                                        if (cmd.equals("0")){
+                                            PropertiesUtil.setSystemProperties("persist.sys.ble_history_isopen","0");
+                                        }else if (cmd.equals("1")){
+                                            PropertiesUtil.setSystemProperties("persist.sys.ble_history_isopen","1");
                                         }
                                         break;
                                     case "setsosmode":
@@ -450,6 +494,9 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                         switch (title){
                             case "wifi":{
                                 String[] wifi = cmd.split("\\|");
+                                if (MainActivity.wifiUtil == null){
+                                    MainActivity.wifiUtil = new WifiUtils(context);
+                                }
                                 if (cmd.equals("1")){
                                     MainActivity.wifiUtil.openWifi();
                                     break;
@@ -460,17 +507,24 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                                 MainActivity.wifiUtil.openWifi();
                                 Log.e("cmd",wifi[0]);
                                 Log.e("cmd",wifi[1]);
-                                if (MainActivity.wifiUtil.isConn())
-                                {
-                                    MainActivity.wifiManager.disconnect();
+                                // 2. 删掉旧配置，防止冲突
+                                WifiConfiguration old = MainActivity.wifiUtil.IsExsits(wifi[0]);
+                                if (old != null) {
+                                    MainActivity.wifiManager.removeNetwork(old.networkId);
+                                    MainActivity.wifiManager.saveConfiguration();
                                 }
 
-                                MainActivity.wifiManager.reconnect();
-                                if (PropertiesUtil.getSystemProperties("persist.sys.ic.wifi_enable")!="true") {
-                                    PropertiesUtil.setSystemProperties("persist.sys.ic.wifi_enable", true);
+                                // 3. 创建并添加新配置
+                                WifiConfiguration config = MainActivity.wifiUtil
+                                        .createWifiInfo(wifi[0], wifi[1], 3);
+                                int netId = MainActivity.wifiManager.addNetwork(config);
+                                if (netId != -1) {
+                                    MainActivity.wifiManager.saveConfiguration();
+                                    // 4. 关键：启用并连接
+                                    MainActivity.wifiManager.disconnect();
+                                    MainActivity.wifiManager.enableNetwork(netId, true);
+                                    MainActivity.wifiManager.reconnect();
                                 }
-                                WifiConfiguration wifiConfiguration = MainActivity.wifiUtil.createWifiInfo(wifi[0],wifi[1],3);
-                                MainActivity.wifiUtil.addNetWork(wifiConfiguration);
                             }
                             break;
                             case "photo":
@@ -512,6 +566,31 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                                 }
                                 break;
                             }
+                            case "networkloc":
+                                Log.e("pushTxt:networkloc ",cmd);
+                                if (cmd.equals("0")){
+                                    PropertiesUtil.setSystemProperties("persist.sys.isnetworkopen","0");
+                                }else if (cmd.equals("1")){
+                                    PropertiesUtil.setSystemProperties("persist.sys.isnetworkopen","1");
+                                }
+                                break;
+                            case "sdkkey":
+                                PropertiesUtil.setSystemProperties("persist.sys.network.tencentsdkkey",cmd);
+                                break;
+                            case "setblehistory":
+                                if (cmd.equals("0")){
+                                    PropertiesUtil.setSystemProperties("persist.sys.ble_history_isopen","0");
+                                }else if (cmd.equals("1")){
+                                    PropertiesUtil.setSystemProperties("persist.sys.ble_history_isopen","1");
+                                }
+                                break;
+                            case "ipchange":
+                                TcpConstants.DOMAIN = PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Ip);
+                                TcpConstants.IP = PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Ip);
+                                TcpConstants.PORT = Integer.parseInt(PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Port));
+                                OrderUtil.getInstance().stopSocket();
+                                OrderUtil.getInstance().startSocket();
+                                break;
                             case "setsosmode":
                                 Log.e("pushTxt:setsosmode ",cmd);
                                 if (cmd.equals("1")){
@@ -525,6 +604,8 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                                     Log.e("ble",cmd);
                                     if (cmd.equals("0")){
                                         SharedPreferencedUtils.setString(context,"isOpen","0");
+                                        PropertiesUtil.setSystemProperties("persist.sys.ble.enable","0");
+
                                         BleConstant.Ble_Is30S = false;
                                         if (MainActivity.bluetoothAdapter != null){
                                             MainActivity.bluetoothAdapter.disable();
@@ -541,6 +622,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
 
                                         OrderUtil.getInstance().stopSocket();
                                     }else {
+                                        PropertiesUtil.setSystemProperties("persist.sys.ble.enable","1");
                                         if (SharedPreferencedUtils.getString(context,"isOpen","0").equals("0")){
                                             SharedPreferencedUtils.setString(context,"isOpen","1");
                                         }
@@ -567,7 +649,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                         SharedPreferencedUtils.setString(context,"isOpen","0");
                         Log.e("BLE","默认开关为0，除非有值");
                     }
-                    if (!SharedPreferencedUtils.getString(context,"isOpen","0").equals("0"))
+                    if (SharedPreferencedUtils.getString(context,"isOpen","0").equals("0"))
                     {
                         if (MainActivity.mBlueService != null){
                             MainActivity.mBlueService.stop();
@@ -582,10 +664,10 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                     }
                     break;
                 case ReceiverConstant.CONFIRMED_FREQUENCY_UPLOAD_BLE:
-                    LogUtils.e("BLe","2");
+                    ICLogger.i("蓝牙广播");
                     AlarmTimer.startConfirmedFrequencyUpload_BLE(context);
 
-                    if (SharedPreferencedUtils.getString(context,"isOpen","0").equals("0")&& !BleConstant.Ble_Is30S)
+                    if (!DeviceUtils.getSystemModel().contains("CRC")&&SharedPreferencedUtils.getString(context,"isOpen","0").equals("0")&& !BleConstant.Ble_Is30S)
                     {
                         LogUtils.e("BLe","跳过蓝牙");
                         break;
@@ -594,12 +676,12 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                     try {
                         if (OrderUtil.getInstance().getIConnectionManager() == null)
                         {
-                            Log.e("ble:","启动网络");
+                            ICLogger.i("ble:"+"启动网络");
                             OrderUtil.getInstance().startSocket();
                         }
 
                         if (MainActivity.mBlueService == null){
-                            Log.e("ble:","蓝牙服务消亡");
+                            ICLogger.i("ble:"+"蓝牙服务消亡");
                             MainActivity.setupChat(context);
                         }
 
@@ -611,15 +693,15 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
 */
                         if(!BluetoothAdapter.getDefaultAdapter().isEnabled()){
                             LogUtils.e("ble","执行蓝牙打开");
-                            MainActivity.blueToothUtils.startBlueEnable(MainActivity.bluetoothAdapter,MainActivity.sContext);
+                            MainActivity.blueToothUtils.startBlueEnable(MainActivity.bluetoothAdapter,context);
                         }
                         getMac();
                     }catch (Exception e)
                     {
-                        LogUtils.e("thread","线程崩溃" + e.toString() );
-                        final Intent intent1 = MainActivity.sContext.getPackageManager().getLaunchIntentForPackage(MainActivity.sContext.getPackageName());
+                        ICLogger.i("thread"+"蓝牙线程崩溃" + e.toString() );
+                        final Intent intent1 = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
                         intent.addFlags(intent1.FLAG_ACTIVITY_CLEAR_TOP);
-                        MainActivity.sContext.startActivity(intent);
+                        context.startActivity(intent);
                     }
 
                     break;
@@ -653,12 +735,14 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                         LogUtils.e("ACTION_SMS_RECEIVED","sender:"+sender+",content:"+content);
                         if (content.contains("#BLUE=ON")){
                             SharedPreferencedUtils.setString(context,"isOpen","1");
+                            PropertiesUtil.setSystemProperties("persist.sys.ble.enable","1");
                             if (!SharedPreferencedUtils.getString(context,"isOpen","0").equals("1")){
                                 AlarmTimer.startConfirmedBle_IsOpen(context, Long.valueOf(30 * 60 * 1000));
                             }
                             OkSocket.sendSMS(sender,"success");
                         }else if (content.contains("#BLUE=OFF")){
                             SharedPreferencedUtils.setString(context,"isOpen","0");
+                            PropertiesUtil.setSystemProperties("persist.sys.ble.enable","0");
                             if (!SharedPreferencedUtils.getString(context,"isOpen","0").equals("1")){
                                 AlarmTimer.startConfirmedBle_IsOpen(context, Long.valueOf(1 * 60 * 1000));
                             }
@@ -773,7 +857,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                                         } else {
                                             apnUtil.addAPN(responseData.getData().getApn(), responseData.getData().getApn(), "", "", "", "", responseData.getData().getMcc() + "", responseData.getData().getMnc() + "", context);
                                             int tipRe = apnUtil.getAPN(context, responseData.getData().getApn());
-                                            apnUtil.setAPN(tipRe, MainActivity.sContext);
+                                            apnUtil.setAPN(tipRe, KApplication.sContext);
                                         }
                                     }
                                 }
@@ -886,12 +970,16 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
         try {
             if (MainActivity.bluetoothAdapter == null){
                 Log.e("thread","准备重启");
+                if (KApplication.sContext == null)
+                {
+                    ICLogger.i("蓝牙模块崩溃重启失败");
+                }
             /*    final Intent intent = MainActivity.sContext.getPackageManager().getLaunchIntentForPackage(MainActivity.sContext.getPackageName());
                 intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 MainActivity.sContext.startActivity(intent);*/
-                Intent splashIntent = new Intent(MainActivity.sContext, MainActivity.class);
+                Intent splashIntent = new Intent(KApplication.sContext, MainActivity.class);
                 splashIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                MainActivity.sContext.startActivity(splashIntent);
+                KApplication.sContext.startActivity(splashIntent);
             /*    final Intent intent = MainActivity.sContext.getPackageManager().getLaunchIntentForPackage((MainActivity.APP_NAME));
                 intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 MainActivity.sContext.startActivity(intent);*/
@@ -900,7 +988,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
 
         }catch (Exception e)
         {
-            Log.e("thread:",e.toString());
+            ICLogger.i("蓝牙崩溃："+e);
             if (MainActivity.mBlueService == null){
                 Log.e("thread","蓝牙线程崩溃");
             }
@@ -922,7 +1010,11 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
         IntentFilter filter = new IntentFilter();
         filter.addAction(BluetoothDevice.ACTION_FOUND);
         filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
-        MainActivity.sContext.registerReceiver(mReceiver, filter);
+        if (KApplication.sContext == null)
+        {
+            ICLogger.i("蓝牙模块扫描后发现重启失败");
+        }
+        KApplication.sContext.registerReceiver(mReceiver, filter);
 
         // 启动蓝牙设备扫描
         BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -941,7 +1033,7 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                 }
 
                 // 注销广播接收器
-                MainActivity.sContext.unregisterReceiver(mReceiver);
+                KApplication.sContext.unregisterReceiver(mReceiver);
 
                 Log.e("BLE",ble);
 
@@ -964,9 +1056,51 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                         +GlobalSettings.MSG_CONTENT_SEPERATOR
                         +System.currentTimeMillis()
                         +"#";
-                Log.e("BLE:t:",tip + "");
+                if (imei.equals("")){
+                    return;
+                }
+                // 你的密码
+                if (PropertiesUtil.getSystemProperties("persist.sys.chacha","0").equals("1")){
+                    String password = PropertiesUtil.getSystemProperties("persist.sys.cha.keypass","traxbean666");
+                    String propertyValue = PropertiesUtil.getSystemProperties("persist.sys.cha.keycode");
+                    String keyCode = propertyValue.isEmpty() ? "01" : propertyValue;
+                    try {
+                        // 直接调用工具类方法生成 Node.js 格式
+                        String encodedCiphertext = ChaCha20Poly1305Util.encryptForNodejs(contentRe, password);
+
+                        contentRe = "{@"+keyCode+encodedCiphertext+"@}"; // 准备通过蓝牙发送
+                        ICLogger.i("蓝牙加密数据(Base64): " + encodedCiphertext);
+
+                    } catch (Exception e) {
+                        ICLogger.e("加密失败", e);
+                        // 蓝牙通信中建议：加密失败时不应发送原始数据
+                        throw new SecurityException("数据加密失败，无法发送", e);
+                    }
+                }
+
+
+
                 if(ble != "" || tip++>0){
-                    OrderUtil.getInstance().sendMsgRe(contentRe);
+                    if (PropertiesUtil.getSystemProperties("persist.sys.ble_history_isopen").equals("1")){
+                        if (PropertiesUtil.getSystemProperties("persis't.sys.protocol_no","1").equals("4")){
+                            Intent intent = new Intent("com.ic.action.BLE_MQTT_DATA");
+                            intent.putExtra("mqttBle", contentRe);
+                            intent.setPackage("com.enqualcomm.support"); // 指定接收应用包名
+                            KApplication.sContext.sendBroadcast(intent);
+                        }else {
+                            OrderUtil.getInstance().sendMsgRe(contentRe);
+                        }
+                    }else {
+                        if (PropertiesUtil.getSystemProperties("persist.sys.protocol_no","1").equals("4")){
+                            Intent intent = new Intent("com.ic.action.BLE_MQTT_DATA");
+                            intent.putExtra("mqttBle", contentRe);
+                            intent.setPackage("com.enqualcomm.support"); // 指定接收应用包名
+                            KApplication.sContext.sendBroadcast(intent);
+                        }else {
+                            OrderUtil.getInstance().sendMsg(contentRe);
+                        }
+                    }
+
                     tip = 1;
                 }
                 Log.e("BLE", "注销广播");
@@ -977,25 +1111,76 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            Log.e("BLE","开始广播");
+            if (intent == null) return;
+
+            final String action = intent.getAction();
+            Log.e("BLE", "开始广播");
+
             if (BluetoothDevice.ACTION_FOUND.equals(action)) {
                 BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                if (device.getBondState() != BluetoothDevice.BOND_BONDED) {
-                    if (device.getName() != null && !map.containsKey(device.getAddress())) {
-                        Log.e("blue",device.getName());
-                        ble += device.getName() + "|" +
-                                device.getAddress() + "|" +
-                                intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE) + "&";;
-                        map.put(device.getAddress(), device);
-                    }
+                if (device == null) {
+                    Log.w("BLE", "ACTION_FOUND 中 device == null");
+                    return;
                 }
+
+                if (device.getBondState() == BluetoothDevice.BOND_BONDED) return;
+
+                // 清理设备名称 - 只保留字母、数字、空格和常见符号
+                String rawName = device.getName();
+                String name = sanitizeDeviceName(rawName); // 关键清理函数
+
+                String addr = device.getAddress();
+                short rssi = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE);
+
+                if (addr == null) {
+                    Log.w("BLE", "device address == null");
+                    return;
+                }
+
+                if (map.containsKey(addr)) return; // 去重
+
+                // 记录原始名称和清理后的名称
+                if (rawName != null && !rawName.equals(name)) {
+                    Log.w("BLE", "清理设备名称: '" + rawName + "' -> '" + name + "'");
+                }
+
+                Log.e("BLE", "发现设备: " + name + " [" + addr + "] RSSI:" + rssi);
+
+                // 保持你原来的 String 拼接
+                ble += name + "|" + addr + "|" + rssi + "&";
+                map.put(addr, device);
+
             } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
                 Log.e("BLE", "扫描结束");
-                }
-                Log.e("BLE", "扫描开始");
             }
+        }
     };
+
+
+
+    /**
+     * 清理蓝牙设备名称，移除不可打印字符
+     * @param name 原始名称
+     * @return 清理后的安全字符串
+     */
+    private String sanitizeDeviceName(String name) {
+        if (name == null) return "N/A";
+
+        // 使用正则保留：字母、数字、中文、空格和常见符号 ._-()
+        String cleaned = name.replaceAll("[^\\p{Print}\\p{InCJKUnifiedIdeographs}]", "");
+
+        // 如果清理后为空，返回N/A
+        if (cleaned.trim().isEmpty()) {
+            return "N/A";
+        }
+
+        // 限制长度防止异常数据
+        if (cleaned.length() > 50) {
+            cleaned = cleaned.substring(0, 47) + "...";
+        }
+
+        return cleaned;
+    }
 
     public static void send_at_to_reset_simcard(Context context) {
         Intent intent = new Intent("com.eqc.intent.action.getTelephony.lbs");

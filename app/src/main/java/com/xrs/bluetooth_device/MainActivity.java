@@ -2,11 +2,16 @@ package com.xrs.bluetooth_device;
 
 import static android.location.LocationManager.GPS_PROVIDER;
 
+import static com.google.gson.internal.bind.TypeAdapters.UUID;
+
+import android.Manifest;
 import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.bluetooth.BluetoothAdapter;
+import android.content.ActivityNotFoundException;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 
@@ -17,12 +22,14 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.net.Uri;
+import android.net.sip.SipManager;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
@@ -31,9 +38,14 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.os.RemoteException;
 import android.provider.Settings;
+import android.speech.tts.TextToSpeech;
 import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NotificationCompat;
+import android.telephony.IccOpenLogicalChannelResponse;
+import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.Window;
@@ -42,13 +54,22 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.android.internal.telephony.CommandsInterface;
 import com.google.gson.Gson;
 
 import com.ic.api.Api;
 import com.ic.api.ApiCreator;
+
+import com.tencent.map.geolocation.TencentLocation;
+import com.tencent.map.geolocation.TencentLocationListener;
+import com.tencent.map.geolocation.TencentLocationManager;
+import com.tencent.map.geolocation.TencentLocationManagerOptions;
+import com.tencent.map.geolocation.TencentLocationRequest;
+import com.xrs.BluetoothManager;
 import com.xrs.bluetooth_device.constant.BleConstant;
 import com.xrs.bluetooth_device.constant.PropertiesConstant;
 import com.xrs.bluetooth_device.function.AlarmTimer;
+import com.xrs.bluetooth_device.model.ApnInfo;
 import com.xrs.bluetooth_device.model.DeviceDetailsModel;
 import com.xrs.bluetooth_device.utils.CameraUtil;
 import com.xrs.bluetooth_device.utils.FileUtils;
@@ -69,18 +90,45 @@ import com.xrs.bluetooth_device.utils.UploadUtil;
 import com.xrs.bluetooth_device.utils.WifiUtils;
 
 
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.lang.reflect.Method;
+import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.MalformedURLException;
+import java.net.ProtocolException;
+import java.net.URL;
+import java.net.UnknownHostException;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import pub.devrel.easypermissions.EasyPermissions;
+
 public class MainActivity extends Activity implements SensorEventListener,Thread.UncaughtExceptionHandler {
     private static final String TAG = "blueToothUtil_Device:";
     private static String mConnectedDeviceName = null;
     public static BlueService mBlueService = null;
+
     public static Context sContext;
     public static FrameLayout cameraFrame;
     private Camera mCamera;
@@ -107,14 +155,182 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
     private Handler handler;
     private MediaPlayer mediaPlayer;
 
+    private TextToSpeech tts;
 
+    private BluetoothManager bluetoothManager;
+    private BlueConnectThread blueConnectThread;
+    private static final String TEST_URL = "http://[2607:f8b0:4004:804::200e]";
+    SipManager mSipManager;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         init();
         sContext = this;
+        wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+        wifiUtil = new WifiUtils(this);
         initView();
+//        initSocket();
+        initBluetooth();
+        if (!DeviceUtils.getSystemModel().contains("MT4")){
+            initWifi();
+        }
+        setDiscoverableTimeout();
+        PropertiesUtil.setSystemProperties("persist.sys.sosmode",false);
+        
+        LogUtils.e("BLe",""+DeviceUtils.getSystemModel());
+        // 初始化Wifi
+
+        PropertiesUtil.setSystemProperties("persist.sys.ic.wifi_enable","true");
+
+//        startActivity(new Intent(this, BluetoothScanActivity.class));
+//        fetchPublicIP();
+//        SSLContext ctx = null;
+//
+//        try {
+//            ctx = SSLContext.getInstance("TLS");
+//            ctx.init(null, null, null);
+//        } catch (NoSuchAlgorithmException e) {
+//            throw new RuntimeException(e);
+//        } catch (KeyManagementException e) {
+//            throw new RuntimeException(e);
+//        }
+
+//        SSLEngine e = ctx.createSSLEngine();
+//        Log.d("TLS", "supported=" + Arrays.toString(e.getSupportedProtocols()));
+//        Log.d("TLS", "enabled=" + Arrays.toString(e.getEnabledProtocols()));
+//
+//
+//        TelephonyManager tm =
+//                (TelephonyManager) this.getSystemService(Context.TELEPHONY_SERVICE);
+//
+//        try {
+//            boolean ok = false;
+//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+//                ok = tm.hasCarrierPrivileges();
+//            }
+//            Log.d(TAG, "hasCarrierPrivileges=" + ok);
+//
+//            if (ok) {
+//                IccOpenLogicalChannelResponse resp = null;
+//                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+//                    resp = tm.iccOpenLogicalChannel("A0000000031010");
+//                }
+//                Log.d(TAG, "iccOpenLogicalChannel=" + resp);
+//
+//                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+//                    if (resp != null && resp.getChannel() >= 0) {
+//                        boolean closed = false;
+//                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+//                            closed = tm.iccCloseLogicalChannel(resp.getChannel());
+//                        }
+//                        Log.d(TAG, "iccCloseLogicalChannel=" + closed);
+//                    }
+//                }
+//            }
+//        } catch (SecurityException e1) {
+//            Log.d(TAG, "SecurityException=" + e1.getMessage());
+//        } catch (Exception e2) {
+//            Log.d(TAG, "Exception=" + Log.getStackTraceString(e2));
+//        }
+
+        // 1. 拿到 TencentLocationManager
+  //        Intent intent = new Intent("android.intent.action.MAIN");
+//        intent.setComponent(new ComponentName(
+//                "com.google.android.gms",
+//                "org.microg.nlp.ui.BackendSettingsActivity"));
+//        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+//        startActivity(intent);
+//        apnUtil.getApnList(this);
+
+
+//        quickNetLoc();
+        if (PropertiesUtil.getSystemProperties("persist.sys.isopenapn","0").equals("1")){
+            if (DeviceUtils.isSimReady(sContext)) {
+                int tip = apnUtil.getAPN(sContext,"30304.mcs");
+                if (tip > 0){
+                    apnUtil.setAPN(tip,MainActivity.sContext);
+                }else {
+                    apnUtil.addAPN("30304.mcs","30304.mcs","","","","","310","410",sContext);
+                    int tipRe = apnUtil.getAPN(sContext,"30304.mcs");
+                    apnUtil.setAPN(tipRe,MainActivity.sContext);
+                    }
+            }
+            AlarmTimer.startIsNetwork(sContext);
+        }
+
+
+//        Intent intent = new Intent();
+//        intent.setClassName("mobile.miki", "mobile.miki.mainui.TestMainList");
+//
+//        try {
+//            // 启动目标Activity
+//            startActivity(intent);
+//        } catch (ActivityNotFoundException e) {
+//            // 如果目标Activity不存在，显示提示信息
+//            Toast.makeText(this, "目标应用未安装或无法启动", Toast.LENGTH_SHORT).show();
+//        }
+   /*     bluetoothManager = new BluetoothManager();
+
+        String deviceAddress = "14:99:3E:5C:C0:11"; // 替换为实际的蓝牙设备地址
+        blueConnectThread = bluetoothManager.connectToDevice(deviceAddress);
+        if (blueConnectThread == null) {
+            Toast.makeText(MainActivity.this, "连接失败", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(MainActivity.this, "连接中...", Toast.LENGTH_SHORT).show();
+        }*/
+//        Intent installIntent = new Intent();
+//        installIntent.setAction(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA);
+//        startActivity(installIntent);
+//        tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
+//            @Override
+//            public void onInit(int status) {
+//                if (status == TextToSpeech.SUCCESS) {
+//                    int result = tts.setLanguage(Locale.CHINA);
+//                    if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+//                        Toast.makeText(MainActivity.this, "语言数据缺失或不支持", Toast.LENGTH_SHORT).show();
+//                    } else {
+//                        tts.speak("你好，欢迎使用语音合成功能！", TextToSpeech.QUEUE_FLUSH, null, null);
+//                    }
+//                } else {
+//                    Toast.makeText(MainActivity.this, "TTS 初始化失败", Toast.LENGTH_SHORT).show();
+//                }
+//            }
+//        });
+//
+//        int result = tts.isLanguageAvailable(Locale.CHINA);
+//        if (result == TextToSpeech.LANG_MISSING_DATA) {
+//            Log.e("tt", "设备缺少中文语音数据");
+//        } else if (result == TextToSpeech.LANG_NOT_SUPPORTED) {
+//            Log.e("tt", "设备不支持中文语音合成");
+//        } else if (result == TextToSpeech.LANG_AVAILABLE) {
+//            Log.e("tt", "设备支持中文语音合成");
+//        } else if (result == TextToSpeech.LANG_COUNTRY_AVAILABLE) {
+//            Log.e("tt", "设备支持中文（中国）语音合成");
+//        } else if (result == TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE) {
+//            Log.e("tt", "设备支持中文（中国）变体语音合成");
+//        } else {
+//            Log.e("tt", "未知返回值: " + result);
+//        }
+
+//        Set<Locale> availableLanguages = tts.getAvailableLanguages();
+//        Log.e("tt", "支持的语言列表: " + availableLanguages);
+  /*      tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
+            @Override
+            public void onInit(int status) {
+                if (status == TextToSpeech.SUCCESS) {
+                    int result = tts.setLanguage(Locale.CHINA);
+                    if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                        Toast.makeText(MainActivity.this, "语言数据缺失或不支持", Toast.LENGTH_SHORT).show();
+                    } else {
+                        tts.speak("你好，欢迎使用语音合成功能！", TextToSpeech.QUEUE_FLUSH, null, null);
+                    }
+                } else {
+                    Toast.makeText(MainActivity.this, "TTS 初始化失败", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });*/
+        
 //        Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
 //        this.startActivity(intent);
 //        Settings.Secure.setLocationProviderEnabled(getContentResolver(), "gps", true);
@@ -148,11 +364,7 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
         handler.postDelayed(playSoundRunnable, INTERVAL);*/
 //        MicrophoneTest microphoneTest = new MicrophoneTest();
 //        microphoneTest.start();
-     /*   initSocket();*/
-        initBluetooth();
-        initWifi();
-        setDiscoverableTimeout();
-        PropertiesUtil.setSystemProperties("persist.sys.sosmode",false);
+
 ////        startAlarmTimer();
 //        Toast toast = Toast.makeText(MainActivity.this, BluetoothAdapter.getDefaultAdapter().getAddress(), Toast.LENGTH_LONG);
 //        showMyToast(toast, 20*1000);
@@ -166,7 +378,6 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
         Settings.Secure.setLocationProviderEnabled(getContentResolver(), GPS_PROVIDER, true);
 */
         Log.e("ss ",PropertiesUtil.getSystemProperties(PropertiesConstant.Properties_Ip));
-
 /*        if (SharedPreferencedUtils.getInteger(sContext,"rootTime",0) < 500) {
             try {
                 SharedPreferencedUtils.setInteger(sContext, "rootTime", SharedPreferencedUtils.getInteger(sContext,"rootTime",0) + 1);
@@ -199,21 +410,21 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
                 e.printStackTrace();
             }
         }*/
-
+        disableNotifications(this);
 
      /*   new AppMonitor(this,"com.xrs.watchservice").startMonitoring(); APN = 30304.mcs, MNC=410, MCC=310*/
-/*        AlarmTimer.startIsNetwork(sContext)*/
-/*       if (DeviceUtils.isSimReady(sContext)){
-            int tip = apnUtil.getAPN(sContext,"30304.mcs");
-
-            if (tip > 0){
-                apnUtil.setAPN(tip,MainActivity.sContext);
-            }else {
-                apnUtil.addAPN("30304.mcs","30304.mcs","","","","","310","410",sContext);
-                int tipRe = apnUtil.getAPN(sContext,"30304.mcs");
-                apnUtil.setAPN(tipRe,MainActivity.sContext);
-            }
-        }*/
+//        AlarmTimer.startIsNetwork(sContext);
+//       if (DeviceUtils.isSimReady(sContext)){
+//            int tip = apnUtil.getAPN(sContext,"30304.mcs");
+//
+//            if (tip > 0){
+//                apnUtil.setAPN(tip,MainActivity.sContext);
+//            }else {
+//                apnUtil.addAPN("30304.mcs","30304.mcs","","","","","310","410",sContext);
+//                int tipRe = apnUtil.getAPN(sContext,"30304.mcs");
+//                apnUtil.setAPN(tipRe,MainActivity.sContext);
+//            }
+//        }
 
  /*       send_at_to_update_lbs();*/
 
@@ -222,11 +433,11 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
 /*
         LedUtils.LedAllEnable(false);
 */
-//       LogUtils.e("apn",apnUtil.getCurrentAPN(sContext));
-     /*   for (ApnInfo a :apnUtil.getApnList(sContext)
-             ) {
-            LogUtils.e("apn",a.getName()+","+a.getApn()+","+a.getId());
-        }*/
+
+//        for (ApnInfo a :apnUtil.getApnList(sContext)
+//             ) {
+//            LogUtils.e("apn",a.getName()+","+a.getApn()+","+a.getId());
+//        }
 
 
        /* send_at_to_reset_simcard(sContext);*/
@@ -240,7 +451,53 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
                 Log.e("update","1");
             }
         }).start();*/
+//        new Handler().postDelayed(() -> quickNetLoc(), 1000);
+        
     }
+
+
+    public void fetchPublicIP() {
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            BufferedReader reader = null;
+            try {
+                URL url = new URL("https://www.showmyip.com");
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.connect();
+
+                int responseCode = connection.getResponseCode();
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+                    StringBuilder content = new StringBuilder();
+                    String inputLine;
+                    while ((inputLine = reader.readLine()) != null) {
+                        content.append(inputLine);
+                    }
+//                    JSONObject jsonObject = new JSONObject(content.toString());
+                    String publicIP = content.toString();
+                    Log.e("test","Public IP Address: " + publicIP);
+                    // 在这里处理获取到的公网 IP 地址
+                } else {
+                    System.out.println("Failed to get IP");
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+                if (reader != null) {
+                    try {
+                        reader.close();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }).start();
+    }
+
 
     public void test() {
         Executor executorService = Executors.newSingleThreadExecutor();
@@ -261,6 +518,19 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
                 }
             }
         });
+    }
+
+    public static void disableNotifications(Context context) {
+        NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // For Android O and above
+            String channelId = "your_channel_id"; // Replace with your actual channel ID
+            notificationManager.deleteNotificationChannel(channelId);
+        } else {
+            // For older versions
+            notificationManager.cancelAll();
+        }
     }
     
 
@@ -300,12 +570,12 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
             MainActivity.bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
             // 初始化蓝牙开关状态
             BleConstant.Ble_IsOpen = SharedPreferencedUtils.getString(this, "isOpen", "0").equals("1");
-
-            if (BleConstant.Ble_IsOpen || !DeviceUtils.getSystemModel().contains("HK")){
+            Boolean isOpenBle = PropertiesUtil.getSystemProperties("persist.sys.ble.enable","1").equals("1");
+            if (isOpenBle/* && (BleConstant.Ble_IsOpen || !DeviceUtils.getSystemModel().contains("HK"))*/){
                 // 尝试打开蓝牙
                 blueToothUtils.startBlueEnable(BluetoothAdapter.getDefaultAdapter(), this);
                 Ble_Action();
-            }else {
+            }else { 
                 BluetoothAdapter.getDefaultAdapter().disable();
             }
 
@@ -316,7 +586,7 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
 
     public static void send_at_to_reset_simcard(Context context) {
         Intent intent = new Intent("com.eqc.intent.action.getTelephony.lbs");
-        intent.putExtra("command", "AT+SFUN=2"); //重新初始化sim卡
+        intent.putExtra("command", "AT+CSQ"); //重新初始化sim卡
         intent.putExtra("arg2", "");
         context.sendBroadcast(intent);
         LogUtils.file("send_at_to_reset_simcard ");
@@ -325,10 +595,7 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
     private void initWifi() {
 
 
-        // 初始化Wifi
-        wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
-        PropertiesUtil.setSystemProperties("persist.sys.ic.wifi_enable","true");
-        wifiUtil = new WifiUtils(this);
+
         wifiUtil.openWifi();
         WifiConfiguration wifiConfiguration = wifiUtil.createWifiInfo("traxbean","88888888",3);
         wifiUtil.addNetWork(wifiConfiguration);
@@ -375,7 +642,7 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
         //判断是否有网络
         if(!NetworkUtil.isNetworkAvailable(sContext))
         {
-            if (SharedPreferencedUtils.getString(sContext,"isOpen","0").equals("1")){
+            if (SharedPreferencedUtils.getString(sContext,"isOpen","0").equals("1")|| (DeviceUtils.getSystemModel().contains("CRC")|| DeviceUtils.getSystemModel().contains("HK")|| DeviceUtils.getSystemModel().contains("MZT"))){
              /*   blueToothUtils.startBlueEnable(MainActivity.bluetoothAdapter,sContext);*/
                 //启动蓝牙配置服务
                 Log.e("Ble","开机未连接网络,蓝牙并要求打开");
@@ -393,22 +660,38 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
         }
         else
         {
-            if (SharedPreferencedUtils.getString(sContext,"isOpen","0").equals("1")){
-                Log.e("Ble","开机连接网络,蓝牙要求打开");
+            if (SharedPreferencedUtils.getString(sContext,"isOpen","0").equals("1") || (DeviceUtils.getSystemModel().contains("CRC") || DeviceUtils.getSystemModel().contains("HK")|| DeviceUtils.getSystemModel().contains("MZT"))){
                 //启动蓝牙配置服务
+                Log.e("blue",":跳过广播");
                 blueStart();
                 AlarmTimer.startConfirmedFrequencyUpload_BLE(sContext);
             }
             else
             {
-                Log.e("Ble","开机连接网络,蓝牙要求关闭");
                 blueStart();
-                blueToothUtils.startBlueEnable(MainActivity.bluetoothAdapter,sContext);
                 AlarmTimer.startConfirmedFrequencyUpload_BLE(sContext);
                 AlarmTimer.startConfirmedBle_IsOpen(sContext, Long.valueOf(30 * 60 * 1000));
             }
         }
     }
+
+    public int[] readSptGpio() {
+        try {
+            BufferedReader reader = new BufferedReader(
+                    new FileReader("/sys/bus/i2c/devices/2-0033/spt_gpio"));
+            String line = reader.readLine();
+            reader.close();
+
+            String[] parts = line.trim().split(" ");
+            int gpioLevel = Integer.parseInt(parts[0]);  // 0=佩戴, 1=未佩戴
+            int sptStatus = Integer.parseInt(parts[1]);  // 内部状态
+
+            return new int[]{gpioLevel, sptStatus};
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
 
     public static void sendBroadcast(String command){
         Intent intent = new Intent();
@@ -460,8 +743,6 @@ public class MainActivity extends Activity implements SensorEventListener,Thread
     }
 
     public static void blueStart(){
-
-        Log.e("BLE","2323");
         if (MainActivity.bluetoothAdapter == null)
         {
             Log.e("BLE","kong");
