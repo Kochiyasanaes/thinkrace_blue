@@ -70,7 +70,10 @@ public class KApplication extends MultiDexApplication /*implements KCEventListen
         GlobalSettings.instance().saveImei(Utils.getContext());
         GlobalSettings.instance().saveImsi(Utils.getContext());
         AlarmTimer.DEFAULT_Blue_INTERVAL = SharedPreferencedUtils.getLong(sContext, "blueScanTime", Long.valueOf(2 * 60 * 1000));
-
+        Log.e("tt",PropertiesUtil.getSystemProperties("persist.sys.bluescan.custom"));
+        if(PropertiesUtil.getSystemProperties("persist.sys.bluescan.custom").equals("zt")){
+            AlarmTimer.DEFAULT_Blue_INTERVAL = 30 * 1000;
+        }
         //初始化Okhttp
         OkSocket.initialize(this, true);
         Log.e("device:",DeviceUtils.getSystemModel());
