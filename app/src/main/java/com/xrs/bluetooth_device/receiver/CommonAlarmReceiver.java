@@ -214,24 +214,16 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                             isWifiCon = false;
                         }
                         handler.removeCallbacksAndMessages(null);
-                    }else {
-                            isNetWork = false;
-                            isReSim = true;
-                            Runnable runnable = new Runnable() {
-                                @Override
-                                public void run() {
-                                    LogUtils.e("是否准备了Sim卡：" + isReSim);
-                                    if (isReSim) {
-                                        LogUtils.e("开始重置 sim 卡");
-                                        send_at_to_reset_simcard(context);
-                                    }
-                                    handler.postDelayed(this, 60 * 1000); // 每分钟执行一次任务
-                                }
-                            };
-                            handler.postDelayed(runnable, 60 * 1000); // 第一次延迟 60 秒执行任务
-                            AlarmTimer.startIsNetwork(context);
-                            PropertiesUtil.setSystemProperties("persist.sys.server_connected",false);
-
+                    } else {
+                        isNetWork = false;
+                        isReSim = true;
+                        // 不再启动 ACTION_Network 定时器，避免持续检测导致强制重启
+                        // 仅保留单次 SIM 卡重置尝试
+                        if (DeviceUtils.isSimReady(context)) {
+                            LogUtils.e("网络断开，尝试重置 sim 卡");
+                            send_at_to_reset_simcard(context);
+                        }
+                        PropertiesUtil.setSystemProperties("persist.sys.server_connected",false);
                     }
                     //获取GPRS状态
                     state = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_MOBILE).getState();
@@ -305,20 +297,12 @@ public class CommonAlarmReceiver extends BroadcastReceiver {
                     }
                     break;
                 case ReceiverConstant.ACTION_Network: //是否有网络
-                    Log.e("网络","没网");
+                    Log.e("网络","ACTION_Network 触发");
                     if (DeviceUtils.isSimReady(context) && !NetworkUtil.isNetworkAvailable(context)){
-                        AlarmTimer.startIsNetwork(context);
-                        Log.e("网络","有卡");
-                        i++;
-                        if (i == 5){
-                            try {
-                                DeviceUtils.setSilentShutdown(context);
-                                SharedPreferencedUtils.setBoolean(context,"isReboot",true);
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-                        }
+                        AlarmTimer.startIsNetwork(context); // 仅维持检测循环，不再累计重启
+                        Log.e("网络","有卡但无网络");
                     }
+                    // 已移除：累计 5 次静默重启逻辑
                     break;
                 case "com.example.HEART_RATE_UPDATE":
                     Log.e("ttt",intent.getIntExtra("heartRate", -1)+"");

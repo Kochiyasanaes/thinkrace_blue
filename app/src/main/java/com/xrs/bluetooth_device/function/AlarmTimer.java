@@ -99,6 +99,11 @@ public class AlarmTimer {
         setAlarmTimer(context, locateEntity);
     }
 
+    public static void cancelIsNetwork(Context context) {
+        AlarmEntity locateEntity = new AlarmEntity(AlarmEntity.Type.IsNetwork);
+        cancelAlarmTimer(context, locateEntity);
+    }
+
     public static void startConfirmedBle_IsOpen(Context context,Long time) {
         AlarmEntity locateEntity = new AlarmEntity(AlarmEntity.Type.IsOpen);
         cancelAlarmTimer(context, locateEntity);//连续操作，结束上一次闹钟
