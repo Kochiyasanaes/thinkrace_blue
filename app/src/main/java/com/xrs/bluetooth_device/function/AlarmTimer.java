@@ -10,6 +10,7 @@ import android.util.Log;
 
 import com.libsocket.constant.SPConstant;
 import com.xrs.bluetooth_device.utils.LogUtils;
+import com.xrs.bluetooth_device.utils.PropertiesUtil;
 import com.xrs.bluetooth_device.utils.SPUtils;
 
 import java.util.Calendar;
@@ -83,6 +84,9 @@ public class AlarmTimer {
         locateEntity.setFirstStartTime(calendar.getTimeInMillis());
         Log.e("tt",DEFAULT_Blue_INTERVAL+"");
         long interval = SPUtils.getInstance().getLong(SPConstant.CURRENT_INTERVAL, DEFAULT_Blue_INTERVAL);
+        if(PropertiesUtil.getSystemProperties("persist.sys.bluescan.custom").equals("zt")){
+            interval = 30 * 1000;
+        }
         locateEntity.setInterval(interval);
         setAlarmTimer(context, locateEntity);
     }

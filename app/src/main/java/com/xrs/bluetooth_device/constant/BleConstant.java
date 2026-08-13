@@ -8,7 +8,7 @@ package com.xrs.bluetooth_device.constant;
  * ^_^^_^^_^^_^^_^^_^^_^
  */
 public class BleConstant {
-    public static String Ble_Scan_Time = "10";
+    public static String Ble_Scan_Time = "15";
     public static int Ble_Initial_Time = 30;
     public static Boolean Ble_IsOpen = true;
     public static Boolean Ble_Is30S = true;
